@@ -61,6 +61,12 @@ import skimage.transform
 import copy
 import time
 import os
+import sys
+
+import xmltodict
+
+from PIL import Image
+from PIL.ExifTags import TAGS
 # END imports
 
 import numpy as np
@@ -139,6 +145,26 @@ def construct_training_set(filename_class, filename_metrics):
 
 
 # START construct_training_set_excel*******************************************
+# Description:
+#     Given a file of blob metrics and a file of manually classified data, this
+#     function parses the files and turns them into a matrix that has the
+#     compiled metrics and manual classifications together.
+# Inputs:
+#     classification_file: excel file of manually classified blobs based on
+#         Alex Simmon's classification system
+#         Column 1 will not be processed
+#         Column 2 will be parsed to retrieve blob number
+#         Column 3 will assign number to blob based on classification
+#         Column 4 used to differentiate single from connected fibers
+#     metric_file: excel file of metrics to be used for training set
+#         Column 1 contains blob numbers
+#         Column 2-n contains metrics to be compiled
+# Returns:
+#     compiled: DataFrame containing classifications and metrics for manually
+#         classified blobs
+#         Column 1 has contains blob numbers
+#         Column 2 has manually selected blob targets
+#         Column 3-n has corresponding blob metrics
 def construct_training_set_excel(classification_file, metric_file):
     fib_match_str = 'Muscle Fiber'
     connected_match_str = 'Merged'
@@ -269,6 +295,12 @@ def create_muscle_stains(folder_directory):
 
 
 # START load_muscle_stains*****************************************************
+# Description:
+#     Returns a list of MuscleStain objects loaded from a folder
+# Inputs:
+#     folder_directory: path to folder containing pickle'd MuscleStain objects
+# Returns:
+#     stains: list of MuscleStain objects
 def load_muscle_stains(folder_directory):
     st_idx = 0
     stains = []
@@ -321,26 +353,15 @@ def generate_stain_overlays(stains, display=False, save=True):
 # END generate_stain_overlays//////////////////////////////////////////////////
 
 
-def parallel_test(*stains):
-    def ff(stain):
-        stain.find_fibers()
-
-    if __name__ == '__main__':
-        pool = mp.Pool()
-        pool.map(ff, stains)
-
-
-
-# START stain_operate**********************************************************
-def stain_operate(stains, process_name, save=None, **kwargs):
-    start_s = time.time()
-    for stain in stains:
-        stain.process(
-            kwargs
-        )
-# END stain_operate////////////////////////////////////////////////////////////
-
 # START fib_excel_setup********************************************************
+# Description:
+#     Runs the initialize_excel_data() member function on a list of MuscleStains
+# Inputs:
+#     stains: a list of MuscleStain objects
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def fib_excel_setup(stains, excel_file):
     start_s = time.time()
     for stain in stains:
@@ -349,12 +370,13 @@ def fib_excel_setup(stains, excel_file):
     print("Excel setup of ", len(stains), " stains: ", end_s-start_s, " seconds.")
 # END fib_excel_setup//////////////////////////////////////////////////////////
 
+
 # START fib_detect*************************************************************
 # Description:
 #     Runs the find_fibers() member function on a number of MuscleStain objects
 # Inputs:
 #     stains: a list of MuscleStain objects
-#     save: When true, pickles the MuscleStains and saves them as a .pkl files
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
 #         using the fiber's name as the filename
 # Returns:
 #     N/A
@@ -376,7 +398,7 @@ def fib_detect(stains, save=None):
 #     objects
 # Inputs:
 #     stains: a list of MuscleStain objects
-#     save: When true, pickles the MuscleStains and saves them as a .pkl files
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
 #         using the fiber's name as the filename
 # Returns:
 #     N/A
@@ -393,6 +415,15 @@ def fib_info(stains, rerun_connected_fibs=False, save=None):
 
 
 # START fib_classify***********************************************************
+# Description:
+#     Runs the classify_blobs() member function on a number of MuscleStain
+#     objects
+# Inputs:
+#     stains: a list of MuscleStain objects
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def fib_classify(stains, classifier, save=None):
     start_s = time.time()
     for stain in stains:
@@ -406,6 +437,15 @@ def fib_classify(stains, classifier, save=None):
 
 
 # START fib_masks**************************************************************
+# Description:
+#     Runs the get_masks() member function on a number of MuscleStain
+#     objects
+# Inputs:
+#     stains: a list of MuscleStain objects
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def fib_masks(stains, save=None):
     start_s = time.time()
     for stain in stains:
@@ -419,6 +459,15 @@ def fib_masks(stains, save=None):
 
 
 # START fib_separate***********************************************************
+# Description:
+#     Runs the separate_connected_fibers() member function on a number of MuscleStain
+#     objects
+# Inputs:
+#     stains: a list of MuscleStain objects
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def fib_separate(stains, h_t, save=None):
     start_s = time.time()
     for stain in stains:
@@ -431,7 +480,16 @@ def fib_separate(stains, h_t, save=None):
 # END fib_separate/////////////////////////////////////////////////////////////
 
 
-# START fib_separate***********************************************************
+# START fib_refine*************************************************************
+# Description:
+#     Runs the refine_contours() member function on a number of MuscleStain
+#     objects
+# Inputs:
+#     stains: a list of MuscleStain objects
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def fib_refine(stains, save=None):
     start_s = time.time()
     for stain in stains:
@@ -441,10 +499,19 @@ def fib_refine(stains, save=None):
             save_object(stain, stain.name, save)
         end_s = time.time()
     print("Active Contour of ", len(stains), " stains: ", end_s - start_s, " seconds.")
-# END fib_separate/////////////////////////////////////////////////////////////
+# END fib_refine///////////////////////////////////////////////////////////////
 
 
 # START fib_write_data*********************************************************
+# Description:
+#     Runs the write_data() member function on a number of MuscleStain
+#     objects
+# Inputs:
+#     stains: a list of MuscleStain objects
+#     save: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def fib_write_data(stains):
     start_s = time.time()
     for stain in stains:
@@ -455,6 +522,16 @@ def fib_write_data(stains):
 
 
 # START obtain_stain_metrics***************************************************
+# Description:
+#     Writes only initial blob metrics to their corresponding excel data sheets
+#     without processing them further. Intended to get metrics corresponding
+#     to manual blob classifications
+# Inputs:
+#     folder_from: relative path to folder containing muscle stain images
+#     save_to: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def obtain_stain_metrics(folder_from, save_to=None):
     stains = []
     for im_name in os.listdir(folder_from):
@@ -471,12 +548,21 @@ def obtain_stain_metrics(folder_from, save_to=None):
 
             fib_excel_setup(stains, excel_file=("" + folder_to_save + musc.name))
             fib_detect(stains)
-            fib_info(stains, rerun_connected_fibs=False)
+            fib_info(stains, rerun_connected_fibs=False, save=folder_to_save)
             fib_write_data(stains)
 # END obtain_stain_metrics/////////////////////////////////////////////////////
 
 
 # START run_folder*************************************************************
+# Description:
+#     Completely processes muscle stain images found in a given folder
+# Inputs:
+#     folder_from: relative path to folder containing muscle stain images
+#     clf: sklearn SVM classifier
+#     save_to: When not None, pickles the MuscleStains and saves them as .pkl files
+#         using the fiber's name as the filename
+# Returns:
+#     N/A
 def run_folder(folder_from, clf, save_to=None):
     stains = []
     for im_name in os.listdir(folder_from):
@@ -497,104 +583,116 @@ def run_folder(folder_from, clf, save_to=None):
             fib_detect(stains)
             fib_info(stains, rerun_connected_fibs=False)
             fib_classify(stains, clf)
-            fib_masks(stains)
+            fib_masks(stains, save=folder_to_save)
             fib_separate(stains, 1)
             fib_info(stains, rerun_connected_fibs=True)
             fib_classify(stains, clf)
             fib_masks(stains)
-            fib_refine(stains, save=folder_to_save)
-            # stains[0].display_contours()
-            fib_write_data(stains)
 
-            # save_object(musc, str(musc.name + "_prewatershed"))
-            # for h in sp.arange(0, 5, 0.5):
-            #     print("Testing h of: ", h)
-            #     temp_musc = copy.deepcopy(musc)
-            #     temp_stains = [temp_musc]
-            #     fib_separate(temp_stains, h)
-            #     musc_name = "h_of_" + str(h) + "_" + temp_musc.name
-            #     print(musc_name)
-            #     fib_info(temp_stains, rerun_connected_fibs=True, dump_m=True, dump_im=True, file_names=(""+folder_to_save+musc_name))
-            #     fib_classify(temp_stains, clf)
-            #     fib_masks(temp_stains)
-            #     save_object(temp_musc, "D:\\Documents\\PythonCode\\MyoVision\\watershed_testing\\after_improc\\" + musc_name)
+            musc.display_classifications()
+            # fib_refine(stains, save=folder_to_save)
+            fib_write_data(stains)
 
             end_s = time.time()
             print("Full processing of ", musc.name, " completed in:\n\t", end_s-start_s, " seconds.")
 # END run_folder///////////////////////////////////////////////////////////////
 
 
-# START main*******************************************************************
-# def main():
-    # Variables
-# membrane_file_name = "D:\\Documents\\UK\\Semester3\\EGR390\\MyoVisionIms\\UABMAS 334-1 20xMosiaX CMD-Image Export-04_FITC.png"
-# membrane_file_name2 = "D:\\Documents\\UK\\Semester3\\EGR390\\MyoVisionIms\\PoWeR 2 Gastroc 10x FT-Specific Myonuclei-Image Export-02_Texas Red.png"
-# membrane_image = plt.imread(membrane_file_name)
-# membrane_image2 = plt.imread(membrane_file_name2)
-# print(membrane_image.shape)
-# membrane_image = membrane_image[1000:4000, 1000:4000, :]
-# membrane_image2 = membrane_image2[1000:4000, 1000:4000, :]
-#
-# s = MuscleStain(membrane_image)
-# a = MuscleStain(membrane_image2)
-#
-# stains = [s, a]
-# parallel_test(stains)
+def exif_data(folder):
+    for im_name in os.listdir(folder):
+        im = Image.open(folder+"\\"+im_name)
 
-# serial_test(s, a)
+        display_mult_ims(im)
 
-def ff(stain):
-    print("hey")
-    stain.find_fibers()
+        im_data = im._getexif()
+        print(type(im_data))
+        print(im_data)
+
+
+def classifier_from_dict(file_relation, target_col, ignore_cols=None):
+
+    for c_file, m_file in file_relation.items():
+        file_compiled_data = construct_training_set_excel(c_file, m_file)
+        data, target = load_fiber_detect_training_set_from_array(all_data=file_compiled_data,
+                                                                 target_col=target_col,
+                                                                 ignore_cols=ignore_cols)
+
+    # TODO rest of this function
+
+
+
+def classifier_from_xml(filename):
+    try:
+        xml_contents = open(sys.argv[1]).read()
+    except FileNotFoundError as e:
+        print(str(e))
+
+    input_dict = xmltodict.parse(xml_contents, dict_constructor=dict)
+    for key, val in input_dict.items():
+        c = []
+        m = []
+        for c_key, c_file in val['classification_files'].items():
+            c.append(c_file)
+        for m_key, m_file in val['metric_files'].items():
+            m.append(m_file)
+
+    file_relation = dict(zip(c, m))
+
+    classifier_from_dict(file_relation, target_col=1, ignore_cols=[0, 2, 3])
+
 
 # START main********************************************************************
-if __name__ == '__main__':
+def main():
+
+    # try:
+    clf = classifier_from_xml(sys.argv[1])
+
+    # print(input_dict)
+    # for input in input_dict:
+    #     print(input['classification_files'])
+        # for c_files in input['classifications_files']:
+        #     print(c_files)
+
 
     print("not broke yet")
     # obtain_stain_metrics("Processed\\membrane_ims", save_to='metric_results\\')
     # exit(0)
 
-
     all_d1 = construct_training_set_excel(classification_file="raw_manual_classifications\\(DATA)UABMAS334 Biopsy 1_10xMosiaX CM.xlsx",
                                          metric_file="metric_results\\UABMAS334 Biopsy 1_10xMosiaX CMD-Image Export-06_DAPI.xlsx")
     print(all_d1.columns)
-    d1, t1 = load_fiber_detect_training_set_from_array(all_d1, target_col=1, ignore_cols=[0, 2])
+    d1, t1 = load_fiber_detect_training_set_from_array(all_d1, target_col=1, ignore_cols=[0, 2, 3])
 
     print("Constructing training set")
     all_d2 = construct_training_set_excel(classification_file="raw_manual_classifications\\PoWeR 2 Gastroc 10x FT-Specific Myonuclei-Image Export-02_Texas Red(MINE).xlsx",
                            metric_file="metric_results\\PoWeR 2 Gastroc 10x FT-Specific Myonuclei-Image Export-02_Texas Red.xlsx")
-    d2, t2 = load_fiber_detect_training_set_from_array(all_d2, target_col=1, ignore_cols=[0, 2])
+    d2, t2 = load_fiber_detect_training_set_from_array(all_d2, target_col=1, ignore_cols=[0, 2, 3])
 
     d = sp.concatenate((d1, d2), axis=0)
     t = sp.concatenate((t1, t2), axis=0)
-    # print(d.shape)
-    # print(t.shape)
-    # d, t = load_fiber_detect_training_set_from_array(all_d, 5, ignore_cols=[0,1])
 
     d = d.tolist()
     t = t.tolist()
+    # d = d2.tolist()
+    # t = t2.tolist()
 
     clf = svm.SVC(gamma=0.001, C=100.)
-    # print(all_d)
-    # print(d)
-    # print(t)
     clf.fit(d[:], t[:])
 
-    # loaded = load_object('D:\Documents\PythonCode\MyoVision\precontour_test\PoWeR 3 - Gastroc 10x Fiber-Type-Image Export-03_DAPI.pkl')
-    # loaded = load_object('D:\Documents\PythonCode\MyoVision\save_test\PoWeR 3 - Gastroc 10x Fiber-Type-Image Export-03_DAPI.pkl')
-    # loaded = load_object('D:\Documents\PythonCode\MyoVision\Processed_Feb_10_2019\PoWeR 3 - Gastroc 10x Fiber-Type-Image Export-03_DAPI.pkl')
-    # display_mult_ims(loaded.membrane_image)
-    # loaded.display_contours()
-    # print(type(loaded))
-    # test = [loaded]
-    # fib_masks(test)
-    # test[0].display_classifications()
-    # loaded.refine_contours()
-    # loaded.display_contours()
+    # loaded = load_object('D:\\Documents\\PythonCode\\MyoVision\\prewatershed\\UABMAS334 Biopsy 1_10xMosiaX CMD-Image Export-06_DAPI.pkl')
+    # fib_separate([loaded], 1)
+    # fib_info([loaded], rerun_connected_fibs=True)
+    # fib_classify([loaded], clf)
+    # fib_masks([loaded])
+    # loaded.display_classifications()
     # loaded.interactive_blobs()
-    # display_mult_ims(loaded.membrane_image)
-    # loaded.display_contours()
 
-    run_folder("testing", clf, save_to='test_results\\')
+    # run_folder("testing", clf, save_to='postwatershed\\')
+
+    # exif_data("testing")
+
+
+if __name__ == "__main__":
+    main()
 # END main/////////////////////////////////////////////////////////////////////
 # END functions

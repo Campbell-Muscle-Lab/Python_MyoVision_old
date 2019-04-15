@@ -202,10 +202,17 @@ class MuscleStain:
         # convexity
         # extent
         # solidity
-        used_metrics = ['Blob Number', 'Area', 'Convexity', 'Extent', 'Eccentricity', 'Solidity']
+        self.used_metrics = ['Blob Number',
+                             'Relative Area',
+                             'Area',
+                             'Convexity',
+                             'Extent',
+                             'Eccentricity',
+                             'Solidity']
 
-        self.data = sp.empty([num_blobs, len(used_metrics)])
+        self.data = sp.empty([num_blobs, len(self.used_metrics)])
 
+        self.blob_metrics.relative_area = sp.empty(num_blobs)            # for multiple metrics
         self.blob_metrics.area = sp.empty(num_blobs)            # for multiple metrics
 
         self.blob_metrics.extent = sp.empty(num_blobs)          # extent metric
@@ -236,6 +243,7 @@ class MuscleStain:
             self.blob_metrics.centroidsy[count] = blob.centroid[0]
 
             self.data[count, :] = sp.array([count,
+                                            blob.area,              # will be relative area
                                             blob.area,
                                             self.blob_metrics.convexity[count],
                                             blob.extent,
@@ -246,14 +254,17 @@ class MuscleStain:
 
         max_area = sp.amax(self.data[:, 1]) # column 1 is area column
         self.data[:, 1] = self.data[:, 1]/max_area
+        self.blob_metrics.relative_area = self.data[:, 1]
 
-        self.output_metrics = pd.DataFrame(self.data, columns=used_metrics)
+        self.output_metrics = pd.DataFrame(self.data, columns=self.used_metrics)
 
         # Dumps all numerical data and overlayed image to excel file
         if rerun_connected is False:
+            self.pre_rerun_props = props
             wb = openpyxl.load_workbook(self.excel_book)
             ws_data = wb['Initial Blob Data']
         else:
+            self.post_rerun_props = props
             wb = openpyxl.load_workbook(self.excel_book)
             ws_data = wb['Post-Watershed Data']
         # Numerical Data to excel
@@ -298,8 +309,24 @@ class MuscleStain:
             sys.exit(1)
 
         # classifier is the Support Vector Machine that has been trained.
-        # print(self.data[:, 1:].shape)
-        self.blob_classified = classifier.predict(self.data[:, 1:])
+        # print(self.data[:, 2:].shape)
+        # print(self.data[:, 2:])
+        print(self.used_metrics[2:])
+        self.blob_classified = classifier.predict(self.data[:, 2:])
+
+        # print(self.blob_classified)
+        #
+        # max_area = 5000
+        # pixel_size = 0.323
+        # convexity_threshold = 1.05
+        # area_threshold = 0.015*(max_area/(pixel_size*pixel_size))
+        # print((self.data[:, 2]<convexity_threshold).shape)
+        # print((self.data[:, 1]<area_threshold).shape)
+        # discard_seeds = sp.where((self.data[:, 2]<convexity_threshold) & (self.data[:, 1]<area_threshold))
+        # print(discard_seeds)
+        # blobs = sp.arange(self.data.shape[0])
+        # space_idx = blobs[self.blob_classified == 3]
+        # input('press key to cont.')
 
     # END classify_blobs///////////////////////////////////////////////////////////
 
