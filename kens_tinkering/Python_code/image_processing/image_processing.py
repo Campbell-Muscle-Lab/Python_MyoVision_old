@@ -9,6 +9,9 @@ import numpy as np
 from skimage.color import rgb2gray
 from skimage.util import invert
 
+def kens_test():
+    a = 1
+
 def return_gray_scale_image(rgb_image):
     # converts a color image to a gray-scale image
     return rgb2gray(rgb_image)
@@ -94,8 +97,8 @@ def deduce_region_props(im_label):
     
     return region
 
-def calculate_blob_properties(im_gray, im_label, region,
-               output_image_base_file_string="", display_padding=10,
+def calculate_blob_properties(im_label,
+               output_image_base_file_string="", display_padding=20, im_gray = [],
                output_excel_file_string=""):
     # Function analyzes blobs, creating a panda structure and, optionally
     # creating an image for each blob
@@ -109,18 +112,42 @@ def calculate_blob_properties(im_gray, im_label, region,
     # Calculate regionprops for the labeled image
     region = regionprops(im_label)
 
-    # Set up for a data dump if required
-    if (output_excel_file_string):
-        no_of_blobs = len(region)
-        blob_data = pd.DataFrame({'area' : np.zeros(no_of_blobs),
-                                  'eccentricity': np.zeros(no_of_blobs)})
-
+    # Set up for a data dump
+    no_of_blobs = len(region)
+    blob_data = pd.DataFrame({
+                              'label' : np.zeros(no_of_blobs),
+                              'area' : np.zeros(no_of_blobs),
+                              'eccentricity': np.zeros(no_of_blobs),
+                              'convex_area': np.zeros(no_of_blobs),
+                              'equivalent_diameter': np.zeros(no_of_blobs),
+                              'extent': np.zeros(no_of_blobs),
+                              'major_axis_length': np.zeros(no_of_blobs),
+                              'minor_axis_length': np.zeros(no_of_blobs),
+                              'solidity': np.zeros(no_of_blobs)})
+#
+#                              'centroid_row': np.zeros(no_of_blobs),
+#                              'centroid_col': np.zeros(no_of_blobs),
+#                              'euler_number': np.zeros(no_of_blobs),
+    
     for i,r in enumerate(region):
-        
+
+        # Store blob data in pandas DataFrame
+        blob_data.at[i, 'label'] = r.label
+        blob_data.at[i, 'area'] = r.area
+        blob_data.at[i, 'eccentricity'] = r.eccentricity
+#        blob_data.at[i, 'centroid_row'] = r.centroid[0]
+#        blob_data.at[i, 'centroid_col'] = r.centroid[1]
+        blob_data.at[i, 'convex_area'] = r.convex_area
+        blob_data.at[i, 'equivalent_diameter'] = r.equivalent_diameter
+#        blob_data.at[i, 'euler_number'] = r.euler_number
+        blob_data.at[i, 'extent'] = r.extent
+        blob_data.at[i, 'major_axis_length'] = r.major_axis_length
+        blob_data.at[i, 'minor_axis_length'] = r.minor_axis_length
+        blob_data.at[i, 'solidity'] = r.solidity
 
         if (output_image_base_file_string):
             # Creates an image showing a padded version of the blob
-            
+
             # Get the bounding box of the blob
             bbox_coordinates = r.bbox
 
@@ -143,12 +170,46 @@ def calculate_blob_properties(im_gray, im_label, region,
             im_overlay = label2rgb(im_mask, im_sub_gray, alpha = 0.3)
 
             # Writes padded blob to an image file created on the fly
-            ofs = ('%s_%d.png' % (output_image_base_file_string,i))
-            print('Writing blob %d to %s' % (i, ofs))
+            ofs = ('%s_%d.png' % (output_image_base_file_string,i+1))
+            print('Writing blob label %d to %s' % (i+1, ofs))
             imsave(ofs,im_overlay)
 
-            
-        
-        if (i==3):
-            break
+#        if (i==3):
+#            break
+
+    # Write data to excel
+    if (output_excel_file_string):
+        print('Writing blob data to %s' % output_excel_file_string)
+        blob_data.to_excel(output_excel_file_string)
+
+    # Return blob data
+    return blob_data
+
+def raw_image_file_to_labeled_image(raw_image_file_string,
+                                saturation_percent = 5,
+                                min_object_size = 5):
+    # Code takes an image_file and returns a labeled image 
+
+    # Read in the image
+    import cv2
+    im = cv2.imread(raw_image_file_string)
     
+    # Convert to gray-scale, normalize, and saturate
+    im_gray = return_gray_scale_image(im)
+    im_norm = normalize_gray_scale_image(im_gray)
+    im_sat = saturate_gray_scale_image(im_norm, saturation_percent)
+    
+    # Deduce edge
+    im_frangi = apply_Frangi_filter(im_sat)
+    im_edge = otsu_threshold(im_frangi)
+
+    # Clear edge and remove small objects
+    im_clear_edge = clear_edge(im_edge, invert_mode = 0)
+    im_remove_small_objects = remove_small_objects(im_clear_edge,
+                                                   min_object_size)
+
+    # Label image
+    im_label = label_image(im_remove_small_objects)
+
+    # Tidy up
+    return im_label, im_sat;
