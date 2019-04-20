@@ -80,6 +80,12 @@ def k_means_image(im, no_of_clusters):
     im_out = k_means.labels_.reshape((im.shape))
     return im_out
 
+def remove_small_objects(im, size_threshold):
+    # removes objects below size_threshold
+    from skimage.morphology import remove_small_objects
+
+    return remove_small_objects(im, size_threshold)
+
 def deduce_region_props(im_label):
     # deduce region props
     from skimage.measure import regionprops
@@ -88,15 +94,61 @@ def deduce_region_props(im_label):
     
     return region
 
-def show_blobs(im, region):
+def calculate_blob_properties(im_gray, im_label, region,
+               output_image_base_file_string="", display_padding=10,
+               output_excel_file_string=""):
+    # Function analyzes blobs, creating a panda structure and, optionally
+    # creating an image for each blob
+    
     import matplotlib.pyplot as plt
-    
-    fig, ax1 = plt.subplots(figsize=(3,3), ncols=1)
-    
-    for r in region:
-        a = r.bbox
-        print(a)
+    from skimage.measure import regionprops
+    from skimage.color import label2rgb
+    from skimage.io import imsave
+    import pandas as pd
+
+    # Calculate regionprops for the labeled image
+    region = regionprops(im_label)
+
+    # Set up for a data dump if required
+    if (output_excel_file_string):
+        no_of_blobs = len(region)
+        blob_data = pd.DataFrame({'area' : np.zeros(no_of_blobs),
+                                  'eccentricity': np.zeros(no_of_blobs)})
+
+    for i,r in enumerate(region):
+        
+
+        if (output_image_base_file_string):
+            # Creates an image showing a padded version of the blob
             
-        if (r>3):
-                break
+            # Get the bounding box of the blob
+            bbox_coordinates = r.bbox
+
+            # Get the size of im_gray
+            rows_cols = im_gray.shape
+
+            # Pad the box
+            top = np.amax([0, bbox_coordinates[0]-display_padding])
+            bottom = np.min([rows_cols[0], bbox_coordinates[2]+display_padding])
+            left = np.amax([0, bbox_coordinates[1]-display_padding])
+            right = np.amin([rows_cols[1], bbox_coordinates[3]+display_padding])
+
+            # Create sub_images using the padded box
+            im_sub_gray = im_gray[top:bottom,left:right]
+            im_sub_label = im_label[top:bottom,left:right]
+            im_mask = np.zeros(im_sub_gray.shape)
+            im_mask[np.nonzero(im_sub_label == (i+1))] = 1
+
+            # Creates the overlay
+            im_overlay = label2rgb(im_mask, im_sub_gray, alpha = 0.3)
+
+            # Writes padded blob to an image file created on the fly
+            ofs = ('%s_%d.png' % (output_image_base_file_string,i))
+            print('Writing blob %d to %s' % (i, ofs))
+            imsave(ofs,im_overlay)
+
+            
+        
+        if (i==3):
+            break
     

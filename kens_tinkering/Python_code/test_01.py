@@ -28,37 +28,41 @@ im_edge = im_proc.otsu_threshold(im_frangi)
 
 im_clear_edge = im_proc.clear_edge(im_edge, invert_mode=0)
 
-im_label = im_proc.label_image(im_clear_edge)
+im_remove_small_objects = im_proc.remove_small_objects(im_clear_edge, 5)
+
+im_label = im_proc.label_image(im_remove_small_objects)
 
 im_rgb_label = im_proc.label_to_rgb(im_label)
 
 r= im_proc.deduce_region_props(im_label)
 
-im_proc.show_blobs(im_label,r)
+im_proc.calculate_blob_properties(im_sat,im_label,r,
+                   output_image_base_file_string="..\\temp\\ken",
+                   output_excel_file_string = "..\\temp\\data.xlsx")
 
-fig, (ax1, ax2, ax3) = plt.subplots(figsize=(13,3), ncols=3)
-ax1.imshow(im)
-
-pos = ax2.imshow(im_gray)
-fig.colorbar(pos,ax = ax2)
-
-pos = ax3.imshow(im_norm)
-fig.colorbar(pos, ax = ax3)
-
-fig, (ax1, ax2, ax3) = plt.subplots(figsize=(13, 3), ncols=3)
-
-ax1.imshow(im_sat)
-fig.colorbar(pos, ax=ax1)
-
-ax2.imshow(im_frangi)
-fig.colorbar(pos, ax=ax2)
-
-ax3.imshow(im_edge)
-fig.colorbar(pos, ax=ax3)
-
-fig, (ax1, ax2, ax3) = plt.subplots(figsize=(13, 3), ncols=3)
-ax1.imshow(im_clear_edge)
-
-ax2.imshow(im_label)
-
-ax3.imshow(im_rgb_label)
+#fig, (ax1, ax2, ax3) = plt.subplots(figsize=(13,3), ncols=3)
+#ax1.imshow(im)
+#
+#pos = ax2.imshow(im_gray)
+#fig.colorbar(pos,ax = ax2)
+#
+#pos = ax3.imshow(im_norm)
+#fig.colorbar(pos, ax = ax3)
+#
+#fig, (ax1, ax2, ax3) = plt.subplots(figsize=(13, 3), ncols=3)
+#
+#ax1.imshow(im_sat)
+#fig.colorbar(pos, ax=ax1)
+#
+#ax2.imshow(im_frangi)
+#fig.colorbar(pos, ax=ax2)
+#
+#ax3.imshow(im_edge)
+#fig.colorbar(pos, ax=ax3)
+#
+#fig, (ax1, ax2, ax3) = plt.subplots(figsize=(13, 3), ncols=3)
+#ax1.imshow(im_clear_edge)
+#
+#ax2.imshow(im_label)
+#
+#ax3.imshow(im_rgb_label)
