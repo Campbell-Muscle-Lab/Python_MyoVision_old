@@ -7,7 +7,7 @@ try:
 except:
     import sys
     sys.path.append('C:\ken\GitHub\CampbellMuscleLab\Projects\Python_MyoVision\kens_tinkering\Python_code')
-    import image_processing.image_processing as im_proc
+    import image_processing.image_proc as im_proc
 
 
 def learn_test_1(excel_file_string,
@@ -59,7 +59,7 @@ def implement_classifier(raw_image_file_string, classifier_file_string):
         im_proc.raw_image_file_to_labeled_image(raw_image_file_string)
 
     # Get the blob data
-    blob_data = im_proc.calculate_blob_properties(im_label)
+    blob_data, region = im_proc.calculate_blob_properties(im_label)
     X = blob_data.drop(['label'],axis=1);
 
     # Load in the classifier
@@ -76,10 +76,12 @@ def implement_classifier(raw_image_file_string, classifier_file_string):
     # Overlay
     im_overlay = label2rgb(im_mask, im_sat, alpha=0.3)
     
-    # Shuffle im_label
-    im_shuffle = np.random.permutation(im_label.max()+1)[im_label]
+    # Shuffle im_label for improved display
+    im_shuffle = im_proc.shuffle_labeled_image(im_label)
     
     fig, (ax1, ax2) = plt.subplots(figsize=(10,10), nrows=2)
     ax1.imshow(im_overlay)
     ax2.imshow(im_shuffle)
-    
+
+    # Return useful stuff
+    return im_mask, im_label, blob_data, region

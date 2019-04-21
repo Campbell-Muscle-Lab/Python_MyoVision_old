@@ -8,6 +8,7 @@ import scipy as sp
 import numpy as np
 from skimage.color import rgb2gray
 from skimage.util import invert
+import matplotlib.pyplot as plt
 
 def kens_test():
     a = 1
@@ -183,7 +184,17 @@ def calculate_blob_properties(im_label,
         blob_data.to_excel(output_excel_file_string)
 
     # Return blob data
-    return blob_data
+    return blob_data, region
+
+def shuffle_labeled_image(im_label):
+    # Shuffles a labeled image to improve visualization
+
+    random_list = np.random.permutation(im_label.max())+1
+    im_shuffle = np.zeros(im_label.shape)
+    for i in np.arange(1,im_label.max()+1):
+        im_shuffle[im_label==i]=random_list[i-1]
+
+    return im_shuffle
 
 def raw_image_file_to_labeled_image(raw_image_file_string,
                                 saturation_percent = 5,
@@ -213,3 +224,79 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
 
     # Tidy up
     return im_label, im_sat;
+
+def handle_potentially_connected_fibers(im_mask, im_label, blob_data, region):
+    # Tries to handle potentially connected fibers
+
+    # First create a new image showing only the connected fibers
+    im_connected = np.zeros(im_mask.shape)
+    im_connected[im_mask==2] = im_label[im_mask==2]
+
+    # Now loop through im_connected looking for the blobs that require analysis
+    max_blob_value = np.amax(im_connected)
+    for i, r in enumerate(region):
+        if (np.any(im_connected==(i+1))):
+            # Pull off the blob
+            # Get the bounding box of the blob
+            bbox_coordinates = r.bbox
+            print(bbox_coordinates)
+
+            top = bbox_coordinates[0]
+            bottom = bbox_coordinates[2]
+            left = bbox_coordinates[1]
+            right = bbox_coordinates[3]
+
+            im_blob = im_connected[top:bottom,left:right]
+            
+            apply_watershed(im_blob,5)
+            
+
+
+#    fig, (ax1, ax2) = plt.subplots(figsize=(5,5), nrows=2)
+#    p = ax1.imshow(im_connected)
+#    fig.colorbar(p,ax=ax1)
+#    ax2.imshow(im_blob)
+    
+def apply_watershed(im_blob, max_size):
+    # Applies the watershed algorithm to try and separate fibers
+
+    from scipy import ndimage as ndi
+    from skimage.feature import peak_local_max
+    from skimage.morphology import watershed
+
+    # Make it a binary image
+    im_blob[im_blob>0]=1
+    
+    # Pad
+    im_blob = np.pad(im_blob,[[1, 1],[1, 1]],'constant')
+
+    im_dist = ndi.distance_transform_edt(im_blob)
+    im_dist[im_dist>=max_size]=max_size
+    local_maxi = peak_local_max(im_dist, indices=False,
+                                footprint = np.ones((3,3)),
+                                labels = im_blob);
+    im_markers = ndi.label(local_maxi)[0]
+    im_markers = remove_small_objects(im_markers,max_size)
+    
+    u = np.unique(im_markers)
+    im2 = np.zeros(im_markers.shape)
+    for i, v in enumerate(u):
+        im2[im_markers==v] = i
+    
+    im_markers = im2
+
+    
+
+    im_label = watershed(-im_dist, im_markers, mask=im_blob,
+                         watershed_line=True)
+    
+    #NOW APPLY CLASSIFICATION ON THAT
+    ken was here and erroring
+    
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(figsize=(5,10),nrows=4)
+    ax1.imshow(im_blob)
+    p2=ax2.imshow(im_dist)
+    fig.colorbar(p2,ax=ax2)
+    p3=ax3.imshow(im_label)
+    fig.colorbar(p3,ax=ax3)
+    p4=ax4.imshow(im_markers)
