@@ -1,7 +1,7 @@
 import scipy as sp
 import pandas as pd
 import openpyxl
-import pandas as pd
+import copy
 
 
 # START load_fiber_detect_training_set_from_file*******************************
@@ -21,7 +21,8 @@ def load_fiber_detect_training_set_from_file(filename, target_col, ignore_cols=N
 
 # START load_fiber_detect_training_set_from_array******************************
 def load_fiber_detect_training_set_from_array(all_data, target_col, ignore_cols=None):
-    data = all_data
+    data = copy.deepcopy(all_data)
+    ignore = copy.deepcopy(ignore_cols)
     # Converts Pandas DataFrame to numpy array if possible
     try:
         target = data[:, target_col]
@@ -29,17 +30,23 @@ def load_fiber_detect_training_set_from_array(all_data, target_col, ignore_cols=
         data = data.to_numpy()
         target = data[:, target_col]
 
-    if ignore_cols is None:
-        ignore_cols = []
-    ignore_cols.append(target_col)
-    ignore_cols.sort(reverse=True)
+    if ignore is None:
+        ignore = []
+    ignore.append(target_col)
+    ignore.sort(reverse=True)
     # ignore_cols is an array that includes the columns numbers to be removed,
     # leaving only the parameter data left
-    for col in ignore_cols:
+    for col in ignore:
         data = sp.delete(data, col, 1)
 
     return data, target
 # END load_fiber_detect_training_set_from_array////////////////////////////////
+
+
+def get_num_columns_from_excel(filename):
+    wb = openpyxl.load_workbook(filename=filename, read_only=True)
+    ws = wb.active
+    return ws.max_column
 
 
 # START load_fiber_detect_training_set_from_excel******************************

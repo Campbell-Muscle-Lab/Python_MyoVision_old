@@ -311,8 +311,8 @@ class MuscleStain:
         # classifier is the Support Vector Machine that has been trained.
         # print(self.data[:, 2:].shape)
         # print(self.data[:, 2:])
-        print(self.used_metrics[2:])
-        self.blob_classified = classifier.predict(self.data[:, 2:])
+        print(self.used_metrics[1:])
+        self.blob_classified = classifier.predict(self.data[:, 1:])
 
         # print(self.blob_classified)
         #
