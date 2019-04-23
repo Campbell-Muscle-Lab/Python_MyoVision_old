@@ -1,0 +1,87 @@
+----------Using MuscleStain class----------
+
+Description:
+	The MuscleStain class is used to describe the current state of the processing of a stain
+
+Imports:
+	from MuscleStain import *
+	import matplotlib.pyplot as plt
+
+
+MuscleStain methods:
+	Processing:
+		initialize_excel_data(self, filename)
+		-Creates the output Excel sheet for this stain
+			-self- This object
+			-filename- Name of Excel file to output to
+
+		find_fibers(self)
+		-Performs Frangi edge mapping and Otsu's method to get binary image of muscle fibers
+			-self- This object
+
+		find_fiber_properties(self, rerun_connected)
+		-Gets shape descriptor information for blobs found after find_fibers and separate_connected_fibers
+			-self- This object
+			-rerun_connected- boolean specifying whether this is processing after separate_connected_fibers
+				-True if separate_connected_fibers has been run
+				-False if separate_connected_fibers has not been run
+
+		classify_blobs(self, classifier)
+		-Uses shape descriptors of blobs and given classifier to determine group of each blob
+			-self- This object
+			-classifier- an sklearn.svm.SVC (support vector machine)
+
+		get_masks(self)
+		-Creates masks for blobs classified as Muscle Fibers, Connected Fibers, and Interstitial Space
+			-self- This object
+
+		separate_connected_fibers(self, h_test)
+		-Performs watershed segmentation on the blobs in the Connected Fiber category
+			-self- This object
+			-h_test- number used for testing watershed
+
+		refine_contours(self)
+		-finds the boundaries of blobs labeled as Muscle Fibers
+			-self- This object
+
+	Display:
+		overlay_blobs(self, pil_im)
+		-Given a PIL image of the stain's fibers_binary, this function overlays it with red numbers corresponding to the blob number
+			-self- This object
+			-pil_im- a PIL image of this stain's fibers_binary member
+
+		interactive_blobs(self)
+		-Allows the user to find the location of blobs by blob number
+			-self- This object
+
+		create_classification_image(self)
+		-Creates and returns a an image with Muscle Fibers masked in yellow, Connected Fibers in blue, Interstitial Space in purple
+			-self- This object
+
+		display_classification(self)
+		-Displays the classification image as made from create_classification_image
+			-self- This object
+
+		display_contours(self)
+		-Displays the stain with Muscle Fiber boundaries outlined
+			-self- This object
+
+	Misc:
+		block_proc(self, im_gray, block_size, func)
+		-Use to break a MuscleStain process that is performed on an image into smaller chunks to use less memory.
+			-self- This object
+			-im_gray- grayscale image to process
+			-block_size- array with 2 values with size of blocks to split image into
+			-func- function pointer to run on chunks
+
+		write_data(self)
+		-Writes collected data to output Excel file
+			-self- This object
+
+
+Creating a MuscleStain object:
+	stain_object = MuscleStain(image)
+	--Where:
+	-image is an image as read in using matplotlib.pyplot's imread
+	-stain_object is the created MuscleStain object
+

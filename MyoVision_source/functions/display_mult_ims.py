@@ -46,22 +46,25 @@ def blob_selector(label_im, underlayed_im=None):
     def show_blob(blob, fig):
         plt.figure(fig.number)
         base = copy.deepcopy(underlayed_im)
+        blobs_to_show = sp.empty((0))
         try:
-            # regex help from:  https: // stackoverflow.com / questions / 33225900 / find - all - numbers - in -a - string - in -python - 3?noredirect = 1 & lq = 1
-            rng = re.findall(r'\d+', blob)
-            if len(rng) > 1:
-                low_blob = min(int(rng[0]), int(rng[1]))
-                high_blob = max(int(rng[0]), int(rng[1]))
-            else:
-                low_blob = int(rng[0])
-                high_blob = low_blob
-            blob = sp.arange(low_blob, high_blob+1)
-            print(blob)
+            groups = blob.split(',')
+            for group in groups:
+                # regex help from:  https: // stackoverflow.com / questions / 33225900 / find - all - numbers - in -a - string - in -python - 3?noredirect = 1 & lq = 1
+                rng = re.findall(r'\d+', group)
+                if len(rng) > 1:
+                    low_blob = min(int(rng[0]), int(rng[1]))
+                    high_blob = max(int(rng[0]), int(rng[1]))
+                else:
+                    low_blob = int(rng[0])
+                    high_blob = low_blob
+                blobs_to_show = sp.append(blobs_to_show, sp.arange(low_blob, high_blob+1))
+                # print(blobs_to_show)
         except ValueError:
             print("Must enter an integer")
             return
 
-        mask = sp.isin(label_im, (blob+1))
+        mask = sp.isin(label_im, (blobs_to_show+1))
         base[mask, :] = [1,1,1]
         plt.imshow(base)
         plt.show()
@@ -73,48 +76,4 @@ def blob_selector(label_im, underlayed_im=None):
         show_blob(blob, fig)
         print('Enter blob number or range (q to quit):')
         blob = input()
-    #
-    # if underlayed_im is None:
-    #     underlayed_im = sp.empty(label_im.shape)
-    #
-    #     # fig, axs = plt.subplots(1, 1)
-    #     # fig.suptitle('Fig title thing')
-    # def show_blob():
-    #     fig = plt.figure()
-    #     ax = fig.add_subplot(1,1,1)
-    #     blob = e1.get()
-    #     base = copy.deepcopy(underlayed_im)
-    #     try:
-    #         blob = int(blob)
-    #         blob = sp.arange(0,blob)
-    #     except ValueError:
-    #         print("Must enter an integer")
-    #         return
-    #
-    #     mask = sp.isin(label_im, (blob+1))
-    #     # idx = (mask == 1)
-    #     base[mask, :] = [1,1,1]
-    #     print('hey')
-    #     ax.imshow(base)
-    #     plt.show()
-    #     print('there')
-    #     # return
-    #     plt.close()
-    #     # print('end of function')
-    #
-    #
-    # master = Tk()
-    # Label(master, text="Blob Number:").grid(row=0)
-    #
-    # e1 = Entry(master)
-    #
-    # e1.grid(row=0, column=1)
-    #
-    # Button(master, text="Go", command=show_blob).grid(row=0, column=2)
-    # # Button(master, text="Quit", command=show_blob).grid(row=0, column=2)
-    #
-    # while True:
-    #     master.update_idletasks()
-    #     master.update()
-    #     master.wait_window()
 # END blob_selector////////////////////////////////////////////////////////////

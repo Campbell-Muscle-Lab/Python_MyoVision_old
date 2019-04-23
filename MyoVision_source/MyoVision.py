@@ -35,7 +35,7 @@ from functions.display_mult_ims import display_mult_ims
 from functions.lists2txt import lists2txt
 from functions.pickle_helpers import save_object, load_object
 from functions.im_overlay import im_overlay
-from functions.sklearn_helpers import load_fiber_detect_training_set_from_array
+from functions.sklearn_helpers import load_fiber_detect_training_set_from_array, get_num_columns_from_excel
 from functions.image_processing import numpy_binary_to_pil
 from PIL import Image, ImageDraw, ImageColor, ImageFont
 from sklearn import svm
@@ -167,7 +167,8 @@ def construct_training_set(filename_class, filename_metrics):
 #         Column 3-n has corresponding blob metrics
 def construct_training_set_excel(classification_file, metric_file):
     fib_match_str = 'Muscle Fiber'
-    connected_match_str = 'Merged'
+    connected_match_str = ['Merged', 'Connected']
+    # connected_match_str = ['Merged']
     space_match_str = 'Interstitial Space '
 
     fib_target_num = 1
@@ -200,7 +201,8 @@ def construct_training_set_excel(classification_file, metric_file):
                     if blob_class in fib_match_str:
                         # Check if it is also merged (classified as connected)
                         if series.iloc[3] is not None:
-                            if connected_match_str in series.iloc[3]:
+                            if(any(match in series.iloc[3] for match in connected_match_str)):
+                            # if connected_match_str in series.iloc[3]:
                                 temp_row.append(connected_target_num)
                             else:
                                 temp_row.append(fib_target_num)
@@ -233,7 +235,7 @@ def construct_training_set_excel(classification_file, metric_file):
         to_del = []
         for b in range(len(classifications[:, 0])):
             for q in range(b+1, len(classifications[:, 0])):
-                if classifications[b, 0] == classifications[q, 0]:
+                if classifications[b, 0] == classifications[q, 0] and q not in to_del:
                     to_del.append(q)
 
         classifications = sp.delete(classifications, to_del, axis=0)
@@ -258,10 +260,16 @@ def construct_training_set_excel(classification_file, metric_file):
     for blob_num in metric_data[:, 0]:
         if blob_num not in classification_data[:, 0]:
             idx_to_del = sp.where(metric_data[:, 0] == blob_num)
+            # if idx_to_del not in idcs:
             idcs.append(idx_to_del)
 
     metric_data = sp.delete(metric_data, idcs, axis=0)
     # metric_data = sp.delete(metric_data, 0, axis=1)
+
+    # for idx in range(len(classification_data[:, 0])):
+    #     print(classification_data[idx, 0], " : ", metric_data[idx, 0])
+    print(classification_data.shape)
+    print(metric_data.shape)
 
     compiled = sp.concatenate((classification_data, metric_data), axis=1)
     compiled = pd.DataFrame(data=compiled)
@@ -570,7 +578,7 @@ def run_folder(folder_from, clf, save_to=None):
             start_s = time.time()
 
             im = plt.imread(folder_from + "\\" + im_name)
-            im = im[1000:3000, 1000:3000, :]
+            # im = im[1000:3000, 1000:3000, :]
             musc = MuscleStain(im)
             musc.name = im_name.replace('.png', '')
             if save_to:
@@ -588,9 +596,7 @@ def run_folder(folder_from, clf, save_to=None):
             fib_info(stains, rerun_connected_fibs=True)
             fib_classify(stains, clf)
             fib_masks(stains)
-
-            musc.display_classifications()
-            # fib_refine(stains, save=folder_to_save)
+            fib_refine(stains, save=folder_to_save)
             fib_write_data(stains)
 
             end_s = time.time()
@@ -610,15 +616,27 @@ def exif_data(folder):
 
 
 def classifier_from_dict(file_relation, target_col, ignore_cols=None):
-
+    data_tuple = ()
+    target_tuple = ()
     for c_file, m_file in file_relation.items():
         file_compiled_data = construct_training_set_excel(c_file, m_file)
         data, target = load_fiber_detect_training_set_from_array(all_data=file_compiled_data,
                                                                  target_col=target_col,
                                                                  ignore_cols=ignore_cols)
+        data_tuple = data_tuple + (data,)
+        target_tuple = target_tuple + (target,)
 
-    # TODO rest of this function
+    all_data = sp.concatenate(data_tuple, axis=0)
+    all_targets = sp.concatenate(target_tuple, axis=0)
 
+    data = all_data.tolist()
+    targets = all_targets.tolist()
+
+    clf = svm.SVC(gamma=0.001, C=100.)
+    # clf = svm.SVC(C=100.)
+    clf.fit(data[:], targets[:])
+
+    return clf
 
 
 def classifier_from_xml(filename):
@@ -638,58 +656,19 @@ def classifier_from_xml(filename):
 
     file_relation = dict(zip(c, m))
 
-    classifier_from_dict(file_relation, target_col=1, ignore_cols=[0, 2, 3])
+    clf = classifier_from_dict(file_relation, target_col=1, ignore_cols=[0, 2])
+    return clf
+
 
 
 # START main********************************************************************
 def main():
-
-    # try:
     clf = classifier_from_xml(sys.argv[1])
-
-    # print(input_dict)
-    # for input in input_dict:
-    #     print(input['classification_files'])
-        # for c_files in input['classifications_files']:
-        #     print(c_files)
-
-
-    print("not broke yet")
-    # obtain_stain_metrics("Processed\\membrane_ims", save_to='metric_results\\')
-    # exit(0)
-
-    all_d1 = construct_training_set_excel(classification_file="raw_manual_classifications\\(DATA)UABMAS334 Biopsy 1_10xMosiaX CM.xlsx",
-                                         metric_file="metric_results\\UABMAS334 Biopsy 1_10xMosiaX CMD-Image Export-06_DAPI.xlsx")
-    print(all_d1.columns)
-    d1, t1 = load_fiber_detect_training_set_from_array(all_d1, target_col=1, ignore_cols=[0, 2, 3])
-
-    print("Constructing training set")
-    all_d2 = construct_training_set_excel(classification_file="raw_manual_classifications\\PoWeR 2 Gastroc 10x FT-Specific Myonuclei-Image Export-02_Texas Red(MINE).xlsx",
-                           metric_file="metric_results\\PoWeR 2 Gastroc 10x FT-Specific Myonuclei-Image Export-02_Texas Red.xlsx")
-    d2, t2 = load_fiber_detect_training_set_from_array(all_d2, target_col=1, ignore_cols=[0, 2, 3])
-
-    d = sp.concatenate((d1, d2), axis=0)
-    t = sp.concatenate((t1, t2), axis=0)
-
-    d = d.tolist()
-    t = t.tolist()
-    # d = d2.tolist()
-    # t = t2.tolist()
-
-    clf = svm.SVC(gamma=0.001, C=100.)
-    clf.fit(d[:], t[:])
-
-    # loaded = load_object('D:\\Documents\\PythonCode\\MyoVision\\prewatershed\\UABMAS334 Biopsy 1_10xMosiaX CMD-Image Export-06_DAPI.pkl')
-    # fib_separate([loaded], 1)
-    # fib_info([loaded], rerun_connected_fibs=True)
-    # fib_classify([loaded], clf)
-    # fib_masks([loaded])
-    # loaded.display_classifications()
+    folder_to_run = sys.argv[2]
+    save_to_folder = sys.argv[3]
+    run_folder(folder_to_run, clf, save_to=save_to_folder)
+    # loaded = load_object("D:\\Documents\\PythonCode\\MyoVision\\prewatershed\\UABMAS334 Biopsy 1_10xMosiaX CMD-Image Export-06_DAPI.pkl")
     # loaded.interactive_blobs()
-
-    # run_folder("testing", clf, save_to='postwatershed\\')
-
-    # exif_data("testing")
 
 
 if __name__ == "__main__":
