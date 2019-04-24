@@ -19,21 +19,32 @@ except:
 
 def kens_test():
     
-    a = np.array([[0, 0, 0, 0],
-                  [0, 1, 2, 2],
-                  [0, 3, 0, 0]])
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from skimage.color import rgb2gray
+    from skimage import data
+    from skimage.filters import gaussian
+    from skimage.segmentation import active_contour
     
-    print('before')
-    print(a)
     
-    c = a[1,1:3]
-    c = 2*c
-    print('c')
-    print(c)
+    img = data.astronaut()
+    img = rgb2gray(img)
     
-    print('after')
-    print(a)
-
+    s = np.linspace(0, 2*np.pi, 400)
+    x = 220 + 100*np.cos(s)
+    y = 100 + 100*np.sin(s)
+    init = np.array([x, y]).T
+    print(init)
+    
+    snake = active_contour(gaussian(img, 3),
+                           init, alpha=0.015, beta=10, gamma=0.001)
+    
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.imshow(img, cmap=plt.cm.gray)
+    ax.plot(init[:, 0], init[:, 1], '--r', lw=3)
+    ax.plot(snake[:, 0], snake[:, 1], '-b', lw=3)
+    ax.set_xticks([]), ax.set_yticks([])
+    ax.axis([0, img.shape[1], img.shape[0], 0])
 
 def return_gray_scale_image(rgb_image):
     # converts a color image to a gray-scale image
@@ -179,7 +190,7 @@ def calculate_blob_properties(im_label,
 
             # Pad the box
             top = np.amax([0, bbox_coordinates[0]-display_padding])
-            bottom = np.min([rows_cols[0], bbox_coordinates[2]+display_padding])
+            bottom = np.amin([rows_cols[0], bbox_coordinates[2]+display_padding])
             left = np.amax([0, bbox_coordinates[1]-display_padding])
             right = np.amin([rows_cols[1], bbox_coordinates[3]+display_padding])
 
@@ -263,22 +274,28 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
 
 def handle_potentially_connected_fibers(im_class, im_label,
                                         blob_data, region,
-                                        classifier_model):
+                                        classifier_model,
+                                        troubleshoot_mode=0):
     # Tries to handle potentially connected fibers
-    
-    # First create a new image showing only the connected fibers
-    im_connected = np.zeros(im_class.shape)
-    im_connected[im_class == 2] = im_label[im_class == 2]
 
     # Make copies of input arrays
     im_class2 = np.copy(im_class)
     im_label2 = np.copy(im_label)
 
+    # First create a new image showing only the connected fibers
+    im_connected = np.zeros(im_class.shape)
+    im_connected[im_class == 2] = im_label[im_class == 2]
+
+    # And of im_connected
+    im_connected2 = np.copy(im_connected)
+    
+    # Make copy of blob_data
+    blob_data2 = blob_data.copy()
+
     # Now loop through im_connected looking for the blobs that require analysis
     blob_counter = np.amax(im_label2)
     for i, r in enumerate(region):
-        print("blob counter: %d" % blob_counter)
-        if (np.any(im_connected == (i+1))):
+        if (np.any(im_connected2 == (i+1))):
             # Pull off the blob
             # Get the bounding box of the blob
             bbox_coordinates = r.bbox
@@ -289,48 +306,58 @@ def handle_potentially_connected_fibers(im_class, im_label,
             right = bbox_coordinates[3]
 
             # Pull off the sub-image containing the connected region
-            im_sub_blob = im_connected[top:bottom,left:right]
-            # and the corresponding bit of the labeled image
-            im_sub_label = im_label2[top:bottom, left:right]
-            # and also of the classification image
-            im_sub_class = im_class2[top:bottom, left:right]
+            im_sub_blob = np.copy(im_connected2)[top:bottom, left:right]
+            # Make sure that it only contains the connected blob we are
+            # currently working on
+            im_sub_blob[np.not_equal(im_sub_blob, (i+1))]=0
+
+            # Pull off the corresponding bit of the labeled image
+            im_sub_label = np.copy(im_label2)[top:bottom, left:right]
+            # And the class image
+            im_sub_class = np.copy(im_class2)[top:bottom, left:right]
 
             # Get a new labeled image using the watershed algorithm
-            im_watershed = apply_watershed(im_sub_blob, 5)
+            im_watershed = apply_watershed(im_sub_blob, 5, troubleshoot_mode)
             max_watershed = np.amax(im_watershed)
-            print(max_watershed)
 
             # Classify that to get new properties
             im_class_new, blob_data_new = \
                 ml.classify_labeled_image(im_watershed, classifier_model)
 
-            # Substitute newly labeled regions into original im_label
+            # Update the sub_label with new labels
+            im_bw = np.zeros(im_watershed.shape)
+            im_bw[im_watershed > 0] = 1
             im_sub_label[im_sub_blob > 0] = \
-                im_watershed[im_sub_blob > 0] + \
-                blob_counter*im_sub_blob[im_sub_blob > 0]
+                im_watershed[im_sub_blob > 0]
+            im_sub_label = im_sub_label + \
+                (blob_counter * im_bw)
             im_label2[top:bottom, left:right] = im_sub_label
 
-            # Similarly substitute new class labels
+            # Similarly, update im_sub_class
+            im_sub_class[im_sub_blob > 0] = 0
             im_sub_class[im_sub_blob > 0] = im_class_new[im_sub_blob > 0]
+
+            # Similarly substitute new class labels
             im_class2[top:bottom, left:right] = im_sub_class
-#
-#            fig, ax = plt.subplots(5,2, figsize=((7,12)))
-#            ax[0,0].imshow(im_label)
-#            ax[0,1].imshow(im_class)
-#            ax[1,0].imshow(im_label2)
-#            ax[1,1].imshow(im_class2)
-#            ax[2,1].imshow(im_sub_class)
-#            ax[3,0].imshow(im_watershed)
-#            ax[3,1].imshow(im_class_new)
-#            ax[4,0].imshow(im_sub_label)
+
+            # Add new blobs to blob_data
+            blob_data2.append(blob_data_new)
 
             # Update blob_counter
             blob_counter = blob_counter + np.amax(im_watershed)
             
-##            
-##            # Still need to update region and blob data
-#    
-#    
+#            if (troubleshoot_mode):
+#                fig, ax = plt.subplots(3, 2, figsize=(7,7))
+#                ax[0, 0].imshow(im_sub_blob)
+#                ax[0, 0].set_title('im_sub_blob')
+#                ax[0, 1].imshow(im_sub_label)
+#                ax[0, 1].set_title('im_sub_label')
+#                ax[1, 0].imshow(im_watershed)
+#                ax[1, 0].set_title('im_watershed')
+#                ax[1, 1].imshow(im_sub_class)
+#                ax[1, 1].set_title('im_sub_class')
+#                break
+
     return im_class2, im_label2
 
 #    fig, (ax1, ax2) = plt.subplots(figsize=(5,5), nrows=2)
@@ -338,47 +365,162 @@ def handle_potentially_connected_fibers(im_class, im_label,
 #    fig.colorbar(p,ax=ax1)
 #    ax2.imshow(im_blob)
     
-def apply_watershed(im_blob, max_size):
+def apply_watershed(im_blob, max_size, troubleshoot_mode=0):
     # Applies the watershed algorithm in an attempt to separate fibers
     # returns a new labeld image
     # Code is based on this example: https://scikit-image.org/docs/dev/auto_examples/segmentation/plot_watershed.html
 
     from scipy import ndimage as ndi
     from skimage.feature import peak_local_max
-    from skimage.morphology import watershed
+    from skimage.morphology import watershed, erosion
+
+    # Copy im_blob
+    im_blob2 = np.copy(im_blob)
 
     # Make it a binary image
-    im_blob[im_blob > 0] = 1
+    im_blob2[im_blob2 > 0] = 1
 
     # Pad
-    im_blob = np.pad(im_blob, [[1, 1], [1, 1]], 'constant')
+    im_blob2 = np.pad(im_blob2, [[1, 1], [1, 1]], 'constant')
 
-    im_dist = ndi.distance_transform_edt(im_blob)
+    im_dist = ndi.distance_transform_edt(im_blob2)
     im_dist[im_dist >= max_size] = max_size
     im_peaks = peak_local_max(im_dist, indices=False,
-                              labels=im_blob)
+                              labels=im_blob2)
     im_peaks = remove_small_objects(im_peaks, max_size)
     im_peaks = label_image(im_peaks)
 
-    im_label = watershed(-im_dist, im_peaks, mask=im_blob,
+    im_label = watershed(-im_dist, im_peaks, mask=im_blob2,
                          watershed_line=True)
+    
+    # Erode image to separate blobs
+    im_label = erosion(im_label)
 
     # Return to original size to account for padding
     im_label = im_label[1:-1, 1:-1]
 
-#    fig, (ax1, ax2, ax3, ax4) = plt.subplots(figsize=(5,10),nrows=4)
-#    ax1.imshow(im_blob)
-#    p2=ax2.imshow(im_dist)
-#    fig.colorbar(p2,ax=ax2)
-#    p3=ax3.imshow(im_peaks)
-#    fig.colorbar(p3,ax=ax3)
-#    p4=ax4.imshow(im_label)
+    if (troubleshoot_mode):
+        fig, (ax1, ax2, ax3, ax4) = plt.subplots(figsize=(5,10),nrows=4)
+        ax1.imshow(im_blob)
+        ax1.set_title("im_blob")
+        p2=ax2.imshow(im_dist)
+        ax2.set_title("im_dist")
+        fig.colorbar(p2,ax=ax2)
+        p3=ax3.imshow(im_peaks)
+        fig.colorbar(p3,ax=ax3)
+        p4=ax4.imshow(im_label)
 
     # Return re-imaged label
     return im_label
-#    
-#    #NOW APPLY CLASSIFICATION ON THAT
-#    blob_data, region = calculate_blob_properties(im_label)
-#    
-#    X = blob_data.drop['label'], axis=1)
-#    
+
+def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
+                       troubleshoot_mode=0):
+    # Refines fiber edges
+
+    from skimage.measure import regionprops
+    from skimage.measure import find_contours
+    from skimage.color import label2rgb
+    from skimage.segmentation import find_boundaries
+    from skimage.segmentation import active_contour
+    from skimage.draw import polygon
+    from scipy import ndimage as ndi
+    
+
+    # Create a new image showing fibers
+    im_fibers = np.zeros(im_class.shape)
+    im_fibers[im_class == 1] = 1
+
+    # Label it
+    im_label = label_image(im_fibers)
+    
+    # Get copy of im_class
+    im_class2 = np.copy(im_class)
+    
+    # Copy the im_sat
+    im_sat2 = np.copy(im_sat)
+    
+    fig,ax = plt.subplots(1,1)
+    ax.imshow(im_label)
+    
+    no_of_fibers = np.amax(im_label)
+    
+    # Calculate regionprops for the labeled image
+    region = regionprops(im_label)
+    
+    rows_cols = im_sat.shape
+    
+    # Create image result
+    im_final = np.zeros(im_label.shape)
+
+    # Cycle through them
+    for i, r in enumerate(region):
+        print("Refining fiber %d of %d" % (i, no_of_fibers))
+
+        # Pull off the blob
+        # Get the bounding box of the blob
+        bbox_coordinates = r.bbox
+
+        top = np.amax([0, bbox_coordinates[0]-refine_padding])
+        bottom = np.amin([rows_cols[0], bbox_coordinates[2]+refine_padding])
+        left = np.amax([0, bbox_coordinates[1]-refine_padding])
+        right = np.amin([rows_cols[1], bbox_coordinates[3]+refine_padding])
+
+        # Pull off the sub-image containing the connected region
+        im_blob = np.copy(im_label)[top:bottom, left:right]
+#        im_blob = np.pad(im_blob, [[1, 1], [1, 1]], 'constant')
+        # Make sure that it only contains the connected blob we are
+        # currently working on
+        im_blob[np.not_equal(im_blob, (i+1))]=0
+        im_blob[im_blob>0]=1
+#        
+#        fig,ax = plt.subplots(1,1)
+#        ax.imshow(im_blob)
+
+        # Get boundaries as coordinates
+        # First if there are many
+        xx = find_contours(im_blob,0.5)[0]
+        snake_init = np.squeeze(xx)[:, ::-1]
+#        print(snake_init)
+
+        # Pull off the raw image
+        im_raw = np.copy(im_sat2)[top:bottom, left:right]
+        # Pad that
+#        im_raw = np.pad(im_raw, [[1, 1], [1, 1]], 'edge')
+        
+        # First overlay
+        im_mask = np.zeros(im_blob.shape)
+        im_mask[im_blob>0] = 1
+        im_overlay = label2rgb(im_mask, im_raw)
+#        im_overlay2 = label2rgb(im_overlay, im_boundaries)
+
+        # Apply active countour
+        snake_final = active_contour(im_raw, snake_init,
+                                     beta=10)
+
+        # Find the points in the snake
+        im_result = np.zeros(im_blob.shape)
+        rr,cc = polygon(snake_final[:, 1], snake_final[:, 0])
+        im_result[rr, cc] = 1
+
+        im_shuffle = shuffle_labeled_image(im_label)
+        im_overlay2 = label2rgb(im_result, im_raw)
+        
+        im_final[top:bottom, left:right] = \
+            im_final[top:bottom, left:right] + (i+1)*im_result
+        
+        if (troubleshoot_mode):
+            fig, ax = plt.subplots(4,2, figsize=(10,7))
+            ax[0, 0].imshow(im_shuffle)
+            ax[0, 1].imshow(im_class2)
+            ax[1, 0].imshow(im_blob)
+            ax[1, 1].imshow(im_raw)
+            ax[2, 0].imshow(im_overlay)
+            ax[2, 0].plot(snake_init[:, 0], snake_init[:, 1],'-g', lw=2)
+            ax[2, 1].imshow(im_raw)
+            ax[2, 1].plot(snake_final[:, 0], snake_final[:, 1],'-r', lw=2)
+            ax[3, 0].imshow(im_result)
+            ax[3, 1].imshow(im_overlay2)
+            
+            break
+        
+    return im_final

@@ -21,7 +21,7 @@ if __name__ == "__main__":
         
         ml.learn_test_1(excel_file_string, output_classifier_file_string)
     
-    if (1):
+    if (0):
         im_proc.kens_test()
     
     if (1):

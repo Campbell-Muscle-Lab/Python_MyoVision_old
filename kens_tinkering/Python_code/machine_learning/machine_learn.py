@@ -99,26 +99,36 @@ def implement_classifier(raw_image_file_string, classifier_file_string):
     im_class2, im_label2 = \
         im_proc.handle_potentially_connected_fibers(im_class, im_label,
                                                     blob_data, region,
-                                                    classifier_model)
+                                                    classifier_model,
+                                                    troubleshoot_mode=0)
 
     # Shuffle im_label for improved display
     im_shuffle = im_proc.shuffle_labeled_image(im_label)
     im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
 
-    fig, ax = plt.subplots(3, 2, figsize=(10,10))
+    fig, ax = plt.subplots(3, 2, figsize=(8,8))
     ax[0, 0].imshow(im_shuffle)
     ax[0, 1].imshow(im_class)
     ax[1, 0].imshow(im_label2)
     ax[2, 0].imshow(im_shuffle2)
     ax[2, 1].imshow(im_class2)
+    
+    fig, ax = plt.subplots(3,2, figsize=(5,5))
+    for i in np.arange(1,4):
+        im_class_test = np.zeros(im_class2.shape)
+        im_class_test[im_class2==i] = 1
+        
+        ax[(i-1),0].imshow(im_class_test)
 
-#
-#    # Create overlay
-#    im_overlay = label2rgb(im_class, im_sat)
-#
-#    
-#    fig, (ax1, ax2) = plt.subplots(figsize=(10,10), nrows=2)
-#    ax1.imshow(im_overlay)
+    im_final = im_proc.refine_fiber_edges(im_class2, im_sat)
+
+    # Create overlay
+    im_mask = np.zeros(im_final.shape)
+    im_mask[im_final>0] = 1
+    im_overlay = label2rgb(im_mask, im_sat)
+    
+    fig, (ax1, ax2) = plt.subplots(figsize=(10,10), nrows=2)
+    ax1.imshow(im_overlay)
 #    ax2.imshow(im_shuffle)
 
     # Return useful stuff
