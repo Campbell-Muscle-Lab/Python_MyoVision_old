@@ -46,9 +46,12 @@ def kens_test():
     ax.set_xticks([]), ax.set_yticks([])
     ax.axis([0, img.shape[1], img.shape[0], 0])
 
-def return_gray_scale_image(rgb_image):
-    # converts a color image to a gray-scale image
-    return rgb2gray(rgb_image)
+def return_gray_scale_image_as_float(rgb_image):
+    # converts a color image to a gray-scale float image
+
+    from skimage import img_as_float
+    
+    return img_as_float(rgb2gray(rgb_image))
 
 def normalize_gray_scale_image(gray_image):
     # normalizes a gray-scale image between 0 and 1
@@ -234,43 +237,114 @@ def shuffle_labeled_image(im_label):
     im_shuffle = np.ones((s[0], s[1], 3))
 
     for i in np.arange(1, no_of_labels+1):
+        print(i)
         # Do an index to r,c for each label
         vi = np.nonzero(im_label == i)
-        r = vi[0]
-        c = vi[1]
-        for j in np.arange(0, len(r)):
-            im_shuffle[r[j], c[j], :] = random_color[:, i-1]
+        im_shuffle[vi[0], vi[1], :] = random_color[:, i-1]
 
     return im_shuffle
 
+def correct_background(im):
+    # Normalizes background
+    from skimage.morphology import reconstruction
+    
+    h = 0.5 * np.mean(im)
+    seed = im-h
+    mask= im
+    dilated = reconstruction(seed, mask, method='dilation')
+    
+    return dilated
+    
+
 def raw_image_file_to_labeled_image(raw_image_file_string,
                                 saturation_percent = 5,
-                                min_object_size = 5):
-    # Code takes an image_file and returns a labeled image 
+                                min_object_size = 5,
+                                verbose_mode = 1,
+                                troubleshoot_mode = 1,
+                                image_label_file_string = "",
+                                image_shuffled_label_file_string = ""):
+    # Code takes an image_file and returns a labeled image
 
-    # Read in the image
     import cv2
+    from skimage.io import imsave
+    import matplotlib.pyplot as plt
+
+    # Read in the image and convert to float
+    if (verbose_mode):
+        print('Importing %s' % raw_image_file_string)
     im = cv2.imread(raw_image_file_string)
-    
+
     # Convert to gray-scale, normalize, and saturate
-    im_gray = return_gray_scale_image(im)
-    im_norm = normalize_gray_scale_image(im_gray)
+    if (verbose_mode):
+        print('Converting to gray-scale')
+    im_gray = return_gray_scale_image_as_float(im)
+
+    if (verbose_mode):
+        print('Subtracting background')
+    im_background_corrected = correct_background(im_gray)
+
+    if (verbose_mode):
+        print('Normalizing gray-scale')
+    im_norm = normalize_gray_scale_image(im_background_corrected)
+
+    if (verbose_mode):
+        print('Saturating image')
     im_sat = saturate_gray_scale_image(im_norm, saturation_percent)
-    
+
     # Deduce edge
+    if (verbose_mode):
+        print('Applying Frangi filter')
     im_frangi = apply_Frangi_filter(im_sat)
+
+    if (verbose_mode):
+        print('Applying Otsu threshold')
     im_edge = otsu_threshold(im_frangi)
 
     # Clear edge and remove small objects
+    if (verbose_mode):
+        print('Clearing objects from boundaries')
     im_clear_edge = clear_edge(im_edge, invert_mode = 0)
+
+    if (verbose_mode):
+        print('Removing objects below a size of %d' % min_object_size)
     im_remove_small_objects = remove_small_objects(im_clear_edge,
                                                    min_object_size)
 
     # Label image
+    if (verbose_mode):
+        print('Labeling image')
     im_label = label_image(im_remove_small_objects)
 
+    if (image_label_file_string):
+        if (verbose_mode):
+            print('Saving labeled image to %s' % image_label_file_string)
+        imsave(image_label_file_string,im_label)
+        
+    if (image_shuffled_label_file_string):
+        if (verbose_mode):
+            print('Creating shuffled label image')
+        im_shuffled = shuffle_labeled_image(im_label)
+        imsave(image_shuffled_label_file_string, im_shuffled)
+    else:
+        im_shuffled = np.zeros(1)
+
+    if (troubleshoot_mode):
+        fig, ax = plt.subplots(4,2, figsize=(10, 10))
+        ax[0, 0].imshow(im)
+        ax[0, 0].set_title('Raw image')
+        ax[0, 1].imshow(im_gray)
+        ax[0, 1].set_title('Converted to gray-scale')
+        ax[1, 0].imshow(im_background_corrected)
+        ax[1, 0].set_title('Background correction')
+        ax[1, 1].imshow(im_sat)
+        ax[1, 1].set_title('Saturated')
+        ax[2, 0].imshow(im_frangi)
+        ax[2, 0].set_title('Frangi edges')
+        ax[2, 1].imshow(im_edge)
+        ax[2, 1].set_title('Otsu threshold')
+
     # Tidy up
-    return im_label, im_sat;
+    return im_label, im_sat, im_shuffled;
 
 def handle_potentially_connected_fibers(im_class, im_label,
                                         blob_data, region,

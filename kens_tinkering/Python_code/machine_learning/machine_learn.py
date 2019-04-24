@@ -127,9 +127,6 @@ def implement_classifier(raw_image_file_string, classifier_file_string):
     im_mask[im_final>0] = 1
     im_overlay = label2rgb(im_mask, im_sat)
     
-    fig, (ax1, ax2) = plt.subplots(figsize=(10,10), nrows=2)
-    ax1.imshow(im_overlay)
-#    ax2.imshow(im_shuffle)
-
-    # Return useful stuff
-#    return im_mask, im_label, blob_data, region
+    fig, ax = plt.subplots(2, 1, figsize=(7,12))
+    ax[0].imshow(im_sat, cmap='gray')
+    ax[1].imshow(im_overlay)
