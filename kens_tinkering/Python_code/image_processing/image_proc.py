@@ -19,32 +19,8 @@ except:
 
 def kens_test():
     
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from skimage.color import rgb2gray
-    from skimage import data
-    from skimage.filters import gaussian
-    from skimage.segmentation import active_contour
-    
-    
-    img = data.astronaut()
-    img = rgb2gray(img)
-    
-    s = np.linspace(0, 2*np.pi, 400)
-    x = 220 + 100*np.cos(s)
-    y = 100 + 100*np.sin(s)
-    init = np.array([x, y]).T
-    print(init)
-    
-    snake = active_contour(gaussian(img, 3),
-                           init, alpha=0.015, beta=10, gamma=0.001)
-    
-    fig, ax = plt.subplots(figsize=(7, 7))
-    ax.imshow(img, cmap=plt.cm.gray)
-    ax.plot(init[:, 0], init[:, 1], '--r', lw=3)
-    ax.plot(snake[:, 0], snake[:, 1], '-b', lw=3)
-    ax.set_xticks([]), ax.set_yticks([])
-    ax.axis([0, img.shape[1], img.shape[0], 0])
+    a={}
+    a['marisa']=3
 
 def return_gray_scale_image_as_float(rgb_image):
     # converts a color image to a gray-scale float image
@@ -67,14 +43,20 @@ def saturate_gray_scale_image(gray_image, x):
     sat_im = rescale_intensity(gray_image, in_range=(lo, hi))
     return sat_im
 
-def apply_Frangi_filter(im):
+def apply_Frangi_filter(im,
+                        scale_low=1, scale_high=10, scale_step=1):
     # applies a Frangi filter to detect edges
-    from skimage.filters import frangi
+    from skimage.filters import frangi, hessian
 
+    # This step seems to be important,
+    # Frangi doesn't work well with (0, 1) image
     im = 255.0 * im
 
+    # Lowering scale range below 1 seems to produce noise
+    # Upper scale range gives wider boundaries between cells
     im_out = frangi(invert(im),
-                    scale_range = (1, 4))
+                    scale_range = (scale_low, scale_high),
+                    scale_step = scale_step)
 
     return im_out
 
@@ -135,7 +117,7 @@ def deduce_region_props(im_label):
     return region
 
 def calculate_blob_properties(im_label,
-               output_image_base_file_string="", display_padding=20, im_gray = [],
+               output_image_base_file_string="", display_padding=100, im_base = [],
                output_excel_file_string=""):
     # Function analyzes blobs, creating a panda structure and, optionally
     # creating an image for each blob
@@ -145,9 +127,12 @@ def calculate_blob_properties(im_label,
     from skimage.color import label2rgb
     from skimage.io import imsave
     import pandas as pd
+    import warnings
 
     # Calculate regionprops for the labeled image
-    region = regionprops(im_label)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        region = regionprops(im_label)
 
     # Set up for a data dump
     no_of_blobs = len(region)
@@ -165,22 +150,27 @@ def calculate_blob_properties(im_label,
 #                              'centroid_row': np.zeros(no_of_blobs),
 #                              'centroid_col': np.zeros(no_of_blobs),
 #                              'euler_number': np.zeros(no_of_blobs),
-    
-    for i,r in enumerate(region):
 
-        # Store blob data in pandas DataFrame
-        blob_data.at[i, 'label'] = r.label
-        blob_data.at[i, 'area'] = r.area
-        blob_data.at[i, 'eccentricity'] = r.eccentricity
-#        blob_data.at[i, 'centroid_row'] = r.centroid[0]
-#        blob_data.at[i, 'centroid_col'] = r.centroid[1]
-        blob_data.at[i, 'convex_area'] = r.convex_area
-        blob_data.at[i, 'equivalent_diameter'] = r.equivalent_diameter
-#        blob_data.at[i, 'euler_number'] = r.euler_number
-        blob_data.at[i, 'extent'] = r.extent
-        blob_data.at[i, 'major_axis_length'] = r.major_axis_length
-        blob_data.at[i, 'minor_axis_length'] = r.minor_axis_length
-        blob_data.at[i, 'solidity'] = r.solidity
+    for i,r in enumerate(region):
+        
+        # Need this bit because of the major and minor axis lengths
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+
+            # Store blob data in pandas DataFrame
+            blob_data.at[i, 'label'] = r.label
+            blob_data.at[i, 'area'] = r.area
+            blob_data.at[i, 'eccentricity'] = r.eccentricity
+            blob_data.at[i, 'convex_area'] = r.convex_area
+            blob_data.at[i, 'equivalent_diameter'] = r.equivalent_diameter
+            blob_data.at[i, 'extent'] = r.extent
+            blob_data.at[i, 'major_axis_length'] = r.major_axis_length
+            blob_data.at[i, 'minor_axis_length'] = r.minor_axis_length
+            blob_data.at[i, 'solidity'] = r.solidity
+
+    #        blob_data.at[i, 'centroid_row'] = r.centroid[0]
+    #        blob_data.at[i, 'centroid_col'] = r.centroid[1]
+    #        blob_data.at[i, 'euler_number'] = r.euler_number
 
         if (output_image_base_file_string):
             # Creates an image showing a padded version of the blob
@@ -189,7 +179,7 @@ def calculate_blob_properties(im_label,
             bbox_coordinates = r.bbox
 
             # Get the size of im_gray
-            rows_cols = im_gray.shape
+            rows_cols = im_base.shape
 
             # Pad the box
             top = np.amax([0, bbox_coordinates[0]-display_padding])
@@ -198,21 +188,20 @@ def calculate_blob_properties(im_label,
             right = np.amin([rows_cols[1], bbox_coordinates[3]+display_padding])
 
             # Create sub_images using the padded box
-            im_sub_gray = im_gray[top:bottom,left:right]
+            im_sub_base = im_base[top:bottom,left:right]
             im_sub_label = im_label[top:bottom,left:right]
-            im_mask = np.zeros(im_sub_gray.shape)
+            im_mask = np.zeros(im_sub_base.shape)
             im_mask[np.nonzero(im_sub_label == (i+1))] = 1
 
             # Creates the overlay
-            im_overlay = label2rgb(im_mask, im_sub_gray, alpha = 0.3)
+            im_overlay = label2rgb(im_mask, im_sub_base,
+                                   bg_color = (0,1,0),
+                                   alpha = 0.3)
 
             # Writes padded blob to an image file created on the fly
             ofs = ('%s_%d.png' % (output_image_base_file_string,i+1))
             print('Writing blob label %d to %s' % (i+1, ofs))
             imsave(ofs,im_overlay)
-
-#        if (i==3):
-#            break
 
     # Write data to excel
     if (output_excel_file_string):
@@ -226,21 +215,18 @@ def shuffle_labeled_image(im_label):
     # Turns a labeled image into an RGB image with blobs with random colors
     # to improve visualization
 
-    # Find the number of labels
-    no_of_labels = np.amax(im_label)
+    from skimage.color import label2rgb
+    from matplotlib import cm
 
-    # Set up random colors
-    random_color = np.random.rand(3, no_of_labels)
+    # Get a non-sequential colormap
+    color_map = cm.get_cmap('tab20')
 
-    # Create im_shuffle as white matrix
-    s = im_label.shape
-    im_shuffle = np.ones((s[0], s[1], 3))
-
-    for i in np.arange(1, no_of_labels+1):
-        print(i)
-        # Do an index to r,c for each label
-        vi = np.nonzero(im_label == i)
-        im_shuffle[vi[0], vi[1], :] = random_color[:, i-1]
+    # Create the shuffled image with label2rgb
+    # using a white background
+    im_shuffle = label2rgb(im_label,
+                           colors=color_map.colors,
+                           bg_label=0,
+                           bg_color=(1, 1, 1))
 
     return im_shuffle
 
@@ -254,82 +240,98 @@ def correct_background(im):
     dilated = reconstruction(seed, mask, method='dilation')
     
     return dilated
+
+def fill_holes(im):
+    # Fills holes in image
+
+    from scipy.ndimage import binary_fill_holes
     
+    return binary_fill_holes(im)
 
 def raw_image_file_to_labeled_image(raw_image_file_string,
-                                saturation_percent = 5,
-                                min_object_size = 5,
-                                verbose_mode = 1,
-                                troubleshoot_mode = 1,
-                                image_label_file_string = "",
-                                image_shuffled_label_file_string = ""):
+                                    image_to_label_parameters = []):
     # Code takes an image_file and returns a labeled image
 
     import cv2
     from skimage.io import imsave
+    from skimage import exposure
     import matplotlib.pyplot as plt
 
     # Read in the image and convert to float
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Importing %s' % raw_image_file_string)
     im = cv2.imread(raw_image_file_string)
 
     # Convert to gray-scale, normalize, and saturate
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Converting to gray-scale')
     im_gray = return_gray_scale_image_as_float(im)
 
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Subtracting background')
     im_background_corrected = correct_background(im_gray)
 
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Normalizing gray-scale')
     im_norm = normalize_gray_scale_image(im_background_corrected)
 
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Saturating image')
-    im_sat = saturate_gray_scale_image(im_norm, saturation_percent)
+    im_sat = saturate_gray_scale_image(im_norm,
+                                       image_to_label_parameters['saturation_percent'])
 
     # Deduce edge
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Applying Frangi filter')
     im_frangi = apply_Frangi_filter(im_sat)
 
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Applying Otsu threshold')
     im_edge = otsu_threshold(im_frangi)
 
-    # Clear edge and remove small objects
-    if (verbose_mode):
-        print('Clearing objects from boundaries')
-    im_clear_edge = clear_edge(im_edge, invert_mode = 0)
+    if (image_to_label_parameters['verbose_mode']):
+        print('Filling holes in thresholded image')
+    im_filled = fill_holes(im_edge)
 
-    if (verbose_mode):
-        print('Removing objects below a size of %d' % min_object_size)
-    im_remove_small_objects = remove_small_objects(im_clear_edge,
-                                                   min_object_size)
+    # Clear edge and remove small objects
+    if (image_to_label_parameters['verbose_mode']):
+        print('Clearing objects from boundaries')
+    im_clear_edge = clear_edge(im_filled, invert_mode=0)
+
+    if (image_to_label_parameters['verbose_mode']):
+        print('Removing objects below a size of %d' %
+                  image_to_label_parameters['min_object_size'])
+    im_remove_small_objects = \
+        remove_small_objects(im_clear_edge,
+                             image_to_label_parameters['min_object_size'])
 
     # Label image
-    if (verbose_mode):
+    if (image_to_label_parameters['verbose_mode']):
         print('Labeling image')
     im_label = label_image(im_remove_small_objects)
 
-    if (image_label_file_string):
-        if (verbose_mode):
-            print('Saving labeled image to %s' % image_label_file_string)
-        imsave(image_label_file_string,im_label)
-        
-    if (image_shuffled_label_file_string):
-        if (verbose_mode):
-            print('Creating shuffled label image')
+    if (image_to_label_parameters['image_label_file_string']):
+        if (image_to_label_parameters['verbose_mode']):
+            print('Saving labeled image to %s' %
+                  image_to_label_parameters['image_label_file_string'])
+        im_out = im_label.astype('uint16')
+        imsave(image_to_label_parameters['image_label_file_string'],
+               exposure.rescale_intensity(im_out))
+
+    if (image_to_label_parameters['shuffled_label_file_string']):
+        if (image_to_label_parameters['verbose_mode']):
+            print('Saving shuffled label image to %s' %
+                  image_to_label_parameters['shuffled_label_file_string'])
         im_shuffled = shuffle_labeled_image(im_label)
-        imsave(image_shuffled_label_file_string, im_shuffled)
+        im_out = 255 * im_shuffled
+        im_out = im_out.astype('uint8')
+        imsave(image_to_label_parameters['shuffled_label_file_string'],
+               im_out)
     else:
         im_shuffled = np.zeros(1)
 
-    if (troubleshoot_mode):
-        fig, ax = plt.subplots(4,2, figsize=(10, 10))
+    if (image_to_label_parameters['troubleshoot_mode']):
+        fig, ax = plt.subplots(4, 2, figsize=(10, 10))
         ax[0, 0].imshow(im)
         ax[0, 0].set_title('Raw image')
         ax[0, 1].imshow(im_gray)
@@ -342,34 +344,48 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
         ax[2, 0].set_title('Frangi edges')
         ax[2, 1].imshow(im_edge)
         ax[2, 1].set_title('Otsu threshold')
+        ax[3, 0].imshow(im_filled)
+        ax[3, 0].set_title('Filled holes')
 
     # Tidy up
-    return im_label, im_sat, im_shuffled;
+    return im_label, im_sat, im_shuffled, im_gray;
 
 def handle_potentially_connected_fibers(im_class, im_label,
                                         blob_data, region,
                                         classifier_model,
-                                        troubleshoot_mode=0):
+                                        watershed_distance=10,
+                                        troubleshoot_mode=0,
+                                        verbose_mode=1):
     # Tries to handle potentially connected fibers
 
     # Make copies of input arrays
     im_class2 = np.copy(im_class)
     im_label2 = np.copy(im_label)
 
-    # First create a new image showing only the connected fibers
+    # Now create a new image showing only the connected fibers
     im_connected = np.zeros(im_class.shape)
     im_connected[im_class == 2] = im_label[im_class == 2]
 
     # And of im_connected
     im_connected2 = np.copy(im_connected)
-    
+
     # Make copy of blob_data
     blob_data2 = blob_data.copy()
+    
+    # Make a figure if required for troubleshooting
+    if (troubleshoot_mode):
+        fig, ax = plt.subplots(3, 2, figsize=(7,7))
 
     # Now loop through im_connected looking for the blobs that require analysis
     blob_counter = np.amax(im_label2)
     for i, r in enumerate(region):
-        if (np.any(im_connected2 == (i+1))):
+        rc = r.coords
+        y = im_connected2[rc[:,0],rc[:,1]]
+        if (np.any(y==(i+1))):
+#        if (np.any(im_connected2 == (i+1))):
+            if (verbose_mode):
+                print('Potentially connected fiber: %d of %d' % (i,len(region)))
+
             # Pull off the blob
             # Get the bounding box of the blob
             bbox_coordinates = r.bbox
@@ -391,7 +407,9 @@ def handle_potentially_connected_fibers(im_class, im_label,
             im_sub_class = np.copy(im_class2)[top:bottom, left:right]
 
             # Get a new labeled image using the watershed algorithm
-            im_watershed = apply_watershed(im_sub_blob, 5, troubleshoot_mode)
+            im_watershed = apply_watershed(im_sub_blob,
+                                           watershed_distance,
+                                           troubleshoot_mode)
             max_watershed = np.amax(im_watershed)
 
             # Classify that to get new properties
@@ -419,26 +437,20 @@ def handle_potentially_connected_fibers(im_class, im_label,
 
             # Update blob_counter
             blob_counter = blob_counter + np.amax(im_watershed)
-            
-#            if (troubleshoot_mode):
-#                fig, ax = plt.subplots(3, 2, figsize=(7,7))
-#                ax[0, 0].imshow(im_sub_blob)
-#                ax[0, 0].set_title('im_sub_blob')
-#                ax[0, 1].imshow(im_sub_label)
-#                ax[0, 1].set_title('im_sub_label')
-#                ax[1, 0].imshow(im_watershed)
-#                ax[1, 0].set_title('im_watershed')
-#                ax[1, 1].imshow(im_sub_class)
-#                ax[1, 1].set_title('im_sub_class')
-#                break
+
+            if (troubleshoot_mode):
+                ax[0, 0].imshow(im_sub_blob)
+                ax[0, 0].set_title('im_sub_blob')
+                ax[0, 1].imshow(im_sub_label)
+                ax[0, 1].set_title('im_sub_label')
+                ax[1, 0].imshow(im_watershed)
+                ax[1, 0].set_title('im_watershed')
+                ax[1, 1].imshow(im_sub_class)
+                ax[1, 1].set_title('im_sub_class')
 
     return im_class2, im_label2
 
-#    fig, (ax1, ax2) = plt.subplots(figsize=(5,5), nrows=2)
-#    p = ax1.imshow(im_connected)
-#    fig.colorbar(p,ax=ax1)
-#    ax2.imshow(im_blob)
-    
+
 def apply_watershed(im_blob, max_size, troubleshoot_mode=0):
     # Applies the watershed algorithm in an attempt to separate fibers
     # returns a new labeld image
@@ -472,22 +484,22 @@ def apply_watershed(im_blob, max_size, troubleshoot_mode=0):
 
     # Return to original size to account for padding
     im_label = im_label[1:-1, 1:-1]
-
-    if (troubleshoot_mode):
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(figsize=(5,10),nrows=4)
-        ax1.imshow(im_blob)
-        ax1.set_title("im_blob")
-        p2=ax2.imshow(im_dist)
-        ax2.set_title("im_dist")
-        fig.colorbar(p2,ax=ax2)
-        p3=ax3.imshow(im_peaks)
-        fig.colorbar(p3,ax=ax3)
-        p4=ax4.imshow(im_label)
+#
+#    if (troubleshoot_mode):
+#        fig, (ax1, ax2, ax3, ax4) = plt.subplots(figsize=(5,10),nrows=4)
+#        ax1.imshow(im_blob)
+#        ax1.set_title("im_blob")
+#        p2=ax2.imshow(im_dist)
+#        ax2.set_title("im_dist")
+#        fig.colorbar(p2,ax=ax2)
+#        p3=ax3.imshow(im_peaks)
+#        fig.colorbar(p3,ax=ax3)
+#        p4=ax4.imshow(im_label)
 
     # Return re-imaged label
     return im_label
 
-def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
+def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
                        troubleshoot_mode=0):
     # Refines fiber edges
 
@@ -496,9 +508,9 @@ def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
     from skimage.color import label2rgb
     from skimage.segmentation import find_boundaries
     from skimage.segmentation import active_contour
+    from skimage.filters import gaussian
     from skimage.draw import polygon
     from scipy import ndimage as ndi
-    
 
     # Create a new image showing fibers
     im_fibers = np.zeros(im_class.shape)
@@ -506,29 +518,28 @@ def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
 
     # Label it
     im_label = label_image(im_fibers)
-    
-    # Get copy of im_class
-    im_class2 = np.copy(im_class)
-    
-    # Copy the im_sat
-    im_sat2 = np.copy(im_sat)
-    
-    fig,ax = plt.subplots(1,1)
-    ax.imshow(im_label)
-    
     no_of_fibers = np.amax(im_label)
-    
+
     # Calculate regionprops for the labeled image
     region = regionprops(im_label)
-    
-    rows_cols = im_sat.shape
-    
+
+    # Get copy of im_class
+    im_class2 = np.copy(im_class)
+
+    # Copy the im_gray
+    im_gray2 = np.copy(im_gray)
+    rows_cols = im_gray.shape
+
     # Create image result
     im_final = np.zeros(im_label.shape)
 
     # Cycle through them
+    print('Refining fibers')
     for i, r in enumerate(region):
-        print("Refining fiber %d of %d" % (i, no_of_fibers))
+        
+        # Show progress
+        if (np.mod(i+1,100) == 1):
+            print("Refining fiber %d of %d" % (i + 1, no_of_fibers))
 
         # Pull off the blob
         # Get the bounding box of the blob
@@ -541,34 +552,29 @@ def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
 
         # Pull off the sub-image containing the connected region
         im_blob = np.copy(im_label)[top:bottom, left:right]
-#        im_blob = np.pad(im_blob, [[1, 1], [1, 1]], 'constant')
         # Make sure that it only contains the connected blob we are
         # currently working on
-        im_blob[np.not_equal(im_blob, (i+1))]=0
-        im_blob[im_blob>0]=1
-#        
-#        fig,ax = plt.subplots(1,1)
-#        ax.imshow(im_blob)
+        im_blob[np.not_equal(im_blob, (i + 1))] = 0
+        # Make it 0 or 1
+        im_blob[im_blob > 0] = 1
 
         # Get boundaries as coordinates
         # First if there are many
         xx = find_contours(im_blob,0.5)[0]
         snake_init = np.squeeze(xx)[:, ::-1]
-#        print(snake_init)
 
         # Pull off the raw image
-        im_raw = np.copy(im_sat2)[top:bottom, left:right]
-        # Pad that
-#        im_raw = np.pad(im_raw, [[1, 1], [1, 1]], 'edge')
-        
-        # First overlay
-        im_mask = np.zeros(im_blob.shape)
-        im_mask[im_blob>0] = 1
-        im_overlay = label2rgb(im_mask, im_raw)
-#        im_overlay2 = label2rgb(im_overlay, im_boundaries)
+        im_raw = np.copy(im_gray2)[top:bottom, left:right]
+#        
+#        # First overlay
+#        im_mask = np.zeros(im_blob.shape)
+#        im_mask[im_blob>0] = 1
+#        im_overlay = label2rgb(im_mask, im_raw)
+##        im_overlay2 = label2rgb(im_overlay, im_boundaries)
 
         # Apply active countour
-        snake_final = active_contour(im_raw, snake_init,
+        snake_final = active_contour(gaussian(im_raw, 3),
+                                     snake_init,
                                      beta=10)
 
         # Find the points in the snake
@@ -576,8 +582,8 @@ def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
         rr,cc = polygon(snake_final[:, 1], snake_final[:, 0])
         im_result[rr, cc] = 1
 
-        im_shuffle = shuffle_labeled_image(im_label)
-        im_overlay2 = label2rgb(im_result, im_raw)
+#        im_shuffle = shuffle_labeled_image(im_label)
+#        im_overlay2 = label2rgb(im_result, im_raw)
         
         im_final[top:bottom, left:right] = \
             im_final[top:bottom, left:right] + (i+1)*im_result
@@ -594,7 +600,5 @@ def refine_fiber_edges(im_class, im_sat, refine_padding = 10,
             ax[2, 1].plot(snake_final[:, 0], snake_final[:, 1],'-r', lw=2)
             ax[3, 0].imshow(im_result)
             ax[3, 1].imshow(im_overlay2)
-            
-            break
-        
+
     return im_final
