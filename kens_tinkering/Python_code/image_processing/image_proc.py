@@ -580,7 +580,9 @@ def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
         # Find the points in the snake
         im_result = np.zeros(im_blob.shape)
         rr,cc = polygon(snake_final[:, 1], snake_final[:, 0])
-        im_result[rr, cc] = 1
+        rows_cols = im_blob.shape
+        vi = np.nonzero(np.logical_and((rr < rows_cols[0]), (cc < rows_cols[1])))
+        im_result[rr[vi], cc[vi]] = 1
 
 #        im_shuffle = shuffle_labeled_image(im_label)
 #        im_overlay2 = label2rgb(im_result, im_raw)
