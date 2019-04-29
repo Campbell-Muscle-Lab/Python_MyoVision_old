@@ -2,13 +2,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-try:
-    import py_vision.image_processing.image_processing as im_proc
-except:
-    import sys
-    sys.path.append('C:\ken\GitHub\CampbellMuscleLab\Projects\Python_MyoVision\kens_tinkering\Python_code')
-    import image_processing.image_proc as im_proc
 
+from modules.image_processing import image_proc as im_proc
 
 def learn_test_1(excel_file_string,
                  output_classifier_file_string=""):
@@ -62,7 +57,6 @@ def classify_labeled_image(im_label, classifier_model):
     blob_data['predicted_class'] = c
 
     # Create a new image showing the classification
-    print(im_label.shape)
     im_class = np.zeros(im_label.shape, dtype = 'uint8')
     for i, r in enumerate(region):
         if (np.mod(i + 1, 100) == 1):
@@ -87,6 +81,7 @@ def implement_classifier(raw_image_file_string, classifier_file_string,
     # Code uses a prior model to predict features
 
     from skimage.color import label2rgb
+    from skimage.io import imsave
 
     # Turn raw_image_file_string into a labeled image
     if (classifier_parameters['verbose_mode']):
@@ -120,7 +115,7 @@ def implement_classifier(raw_image_file_string, classifier_file_string,
                                                     blob_data, region,
                                                     classifier_model,
                                                     classifier_parameters['watershed_distance'],
-                                                    troubleshoot_mode=1)
+                                                    troubleshoot_mode=0)
 
     # Shuffle im_label for improved display
     im_shuffle = im_proc.shuffle_labeled_image(im_label)
@@ -133,7 +128,6 @@ def implement_classifier(raw_image_file_string, classifier_file_string,
     ax[2, 0].imshow(im_shuffle2)
     ax[2, 1].imshow(im_class2)
 
-    
     fig, ax = plt.subplots(3,2, figsize=(5,5))
     for i in np.arange(1,4):
         im_class_test = np.zeros(im_class2.shape)
@@ -150,3 +144,8 @@ def implement_classifier(raw_image_file_string, classifier_file_string,
     fig, ax = plt.subplots(1, 2, figsize=(12, 7))
     ax[0].imshow(im_gray, cmap='gray')
     ax[1].imshow(im_overlay)
+
+
+    # Save final result
+    im_out = im_proc.merge_label_and_blue_image(im_mask, im_gray)
+    imsave(classifier_parameters['result_file_string'], im_out)

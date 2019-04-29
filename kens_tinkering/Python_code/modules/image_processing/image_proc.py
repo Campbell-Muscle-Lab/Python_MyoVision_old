@@ -10,12 +10,8 @@ from skimage.color import rgb2gray
 from skimage.util import invert
 import matplotlib.pyplot as plt
 
-try:
-    import py_vision.machine_learing.machine_learn as ml
-except:
-    import sys
-    sys.path.append('C:\ken\GitHub\CampbellMuscleLab\Projects\Python_MyoVision\kens_tinkering\Python_code')
-    import machine_learning.machine_learn as ml
+from modules.machine_learning import machine_learn as ml
+
 
 def kens_test():
     
@@ -229,6 +225,21 @@ def shuffle_labeled_image(im_label):
                            bg_color=(1, 1, 1))
 
     return im_shuffle
+
+def merge_label_and_blue_image(im_label, im_blue):
+    # Places label on top of a blue image
+    
+    rows_cols = im_label.shape
+    
+    im_out = np.zeros((rows_cols[0], rows_cols[1], 3))
+    
+    im_label2 = np.zeros(im_label.shape)
+    im_label2[im_label > 0]= 0.5
+    
+    im_out[:, :, 0] = im_label2
+    im_out[:, :, 2] = im_blue
+    
+    return im_out
 
 def correct_background(im):
     # Normalizes background
@@ -528,7 +539,7 @@ def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
 
     # Copy the im_gray
     im_gray2 = np.copy(im_gray)
-    rows_cols = im_gray.shape
+    rows_cols = im_gray2.shape
 
     # Create image result
     im_final = np.zeros(im_label.shape)
@@ -536,7 +547,7 @@ def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
     # Cycle through them
     print('Refining fibers')
     for i, r in enumerate(region):
-        
+
         # Show progress
         if (np.mod(i+1,100) == 1):
             print("Refining fiber %d of %d" % (i + 1, no_of_fibers))
@@ -552,6 +563,7 @@ def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
 
         # Pull off the sub-image containing the connected region
         im_blob = np.copy(im_label)[top:bottom, left:right]
+
         # Make sure that it only contains the connected blob we are
         # currently working on
         im_blob[np.not_equal(im_blob, (i + 1))] = 0
@@ -560,17 +572,11 @@ def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
 
         # Get boundaries as coordinates
         # First if there are many
-        xx = find_contours(im_blob,0.5)[0]
+        xx = find_contours(im_blob, 0.5)[0]
         snake_init = np.squeeze(xx)[:, ::-1]
 
         # Pull off the raw image
         im_raw = np.copy(im_gray2)[top:bottom, left:right]
-#        
-#        # First overlay
-#        im_mask = np.zeros(im_blob.shape)
-#        im_mask[im_blob>0] = 1
-#        im_overlay = label2rgb(im_mask, im_raw)
-##        im_overlay2 = label2rgb(im_overlay, im_boundaries)
 
         # Apply active countour
         snake_final = active_contour(gaussian(im_raw, 3),
@@ -580,16 +586,13 @@ def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
         # Find the points in the snake
         im_result = np.zeros(im_blob.shape)
         rr,cc = polygon(snake_final[:, 1], snake_final[:, 0])
-        rows_cols = im_blob.shape
-        vi = np.nonzero(np.logical_and((rr < rows_cols[0]), (cc < rows_cols[1])))
+        rows_cols_b = im_blob.shape
+        vi = np.nonzero(np.logical_and((rr < rows_cols_b[0]), (cc < rows_cols_b[1])))
         im_result[rr[vi], cc[vi]] = 1
 
-#        im_shuffle = shuffle_labeled_image(im_label)
-#        im_overlay2 = label2rgb(im_result, im_raw)
-        
         im_final[top:bottom, left:right] = \
             im_final[top:bottom, left:right] + (i+1)*im_result
-        
+
         if (troubleshoot_mode):
             fig, ax = plt.subplots(4,2, figsize=(10,7))
             ax[0, 0].imshow(im_shuffle)

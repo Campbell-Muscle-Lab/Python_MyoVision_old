@@ -10,8 +10,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-import image_processing.image_proc as im_proc
-import machine_learning.machine_learn as ml
+import modules.image_processing.image_proc as im_proc
+import modules.machine_learning.machine_learn as ml
 
 if __name__ == "__main__":
     
@@ -26,16 +26,18 @@ if __name__ == "__main__":
     
     if (1):
         # implement classifier
-        im_file_string = '..\\data\\Power_3_Gastroc_10x_blue_cropped.png'
+        im_file_string = '..\\data\\Power_3_Gastroc_10x_blue.png'
         classifier_file_string = '..\\classifier\\Power_3_Gastroc_10x_blue_cropped_assigned.svc'
         saturation_percent = 15
         min_blob_area = 50
         image_label_file_string = '..\\temp\\Power_3_Gastroc_10x_blue_labeled.png'
         shuffled_label_file_string = '..\\temp\\Power_3_Gastroc_10x_blue_labeled.png'
+        result_file_string = '..\\temp\\Power_3_Gastroc_result.png'
         
         classifier_parameters={}
         classifier_parameters['verbose_mode'] = 1
         classifier_parameters['watershed_distance'] = 10
+        classifier_parameters['result_file_string'] = result_file_string
         
         label_image_parameters={}
         label_image_parameters['saturation_percent'] = 15
@@ -46,23 +48,23 @@ if __name__ == "__main__":
             image_label_file_string
         label_image_parameters['shuffled_label_file_string'] = \
             shuffled_label_file_string
-
+            
+#        im_label, im_sat, im_shuffled, im_gray = \
+#            im_proc.raw_image_file_to_labeled_image(im_file_string,
+#                                                image_to_label_parameters=label_image_parameters)
+#        
+#        im_rgb = im_proc.merge_label_and_blue_image(im_label, im_gray)
+#        
+#        fig, ax = plt.subplots(2,2, figsize=(10,10))
+#        ax[0, 0].imshow(im_gray)
+#        ax[0, 1].imshow(im_label)
+#        ax[1, 0].imshow(im_rgb)
+#
         ml.implement_classifier(im_file_string,
                                 classifier_file_string,
                                 classifier_parameters = classifier_parameters,
                                 image_to_label_parameters=label_image_parameters)
-#            
-#        im_proc.handle_potentially_connected_fibers(im_mask,
-#                                                    im_label,
-#                                                    blob_data,
-#                                                    region)
-#        
-#    #    im_label = im_proc.raw_image_to_labeled_image(im_file_string)
-#    #    
-#    #    im_proc.calculate_blob_properties(im_label,
-#    #                                      output_excel_file_string = blob_excel_file_string)
-#        
-    
+
     if (0):
         raw_im_file_string = '..\\data\PoWer_3_Gastroc_10x_blue_cropped.png'
         saturation_percent = 15
