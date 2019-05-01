@@ -11,12 +11,38 @@ from skimage.util import invert
 import matplotlib.pyplot as plt
 
 from modules.machine_learning import machine_learn as ml
+from . import morphsnakes as ms
 
 
-def kens_test():
+def kens_test(image_file_string):
+
+    from skimage.util import view_as_blocks
     
-    a={}
-    a['marisa']=3
+    import cv2
+    im = cv2.imread(image_file_string)
+    im_gray = return_gray_scale_image_as_float(im)
+    
+    rc = im_gray.shape
+    print(rc)
+    im_gray = im_gray[0:2400,0:2800]
+    
+    block_shape = (200,200)
+    
+    view = view_as_blocks(im_gray, block_shape)
+    print('view')
+    print(view)
+    
+    for i in np.arange(0,10):
+        for j in np.arange(0,10):
+            print('i %d j %d' % (i,j))
+            view[i,j] = apply_Frangi_filter(view[i,j])
+            
+    r = view.transpose(0,2,1,3).reshape(-1,view.shape[1]*view.shape[3])
+    
+    fig, ax = plt.subplots(2,2, figsize=(5,5))
+    ax[0,0].imshow(im_gray)
+    ax[0,1].imshow(r)
+    
 
 def return_gray_scale_image_as_float(rgb_image):
     # converts a color image to a gray-scale float image
@@ -284,7 +310,10 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
     import cv2
     from skimage.io import imsave
     from skimage import exposure
+    from skimage.util import view_as_blocks
     import matplotlib.pyplot as plt
+    
+    
 
     # Read in the image and convert to float
     if (image_to_label_parameters['verbose_mode']):
@@ -295,7 +324,78 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
     if (image_to_label_parameters['verbose_mode']):
         print('Converting to gray-scale')
     im_gray = return_gray_scale_image_as_float(im)
+    
+    if (image_to_label_parameters['block_size'] > 0):
+        # Block process
+        
+        # Crop image to multiple of block size
+        bs = image_to_label_parameters['block_size']
+        rc = im_gray.shape
+        y_blocks = np.floor(rc[0]/bs)
+        x_blocks = np.floor(rc[1]/bs)
+        
+        y_blocks = y_blocks.astype(int)
+        x_blocks = x_blocks.astype(int)
+        
+        print('y_blocks: %d' % y_blocks)
+        print('x_blocks: %d' % x_blocks)
+        print('bs %d' % bs)
+        
+        im_gray = im_gray[0:(y_blocks*bs), 0:(x_blocks*bs)]
+        im_sat = np.zeros(im_gray.shape)
+        view = view_as_blocks(im_gray, (bs, bs))
+        view2 = view_as_blocks(im_sat, (bs, bs))
+        for i in np.arange(0,y_blocks):
+            for j in np.arange(0,x_blocks):
+                print('block (%d, %d):' % (i,j))
+                view[i,j], view2[i,j] = test(view[i,j], im,
+                    image_to_label_parameters = image_to_label_parameters)
 
+        im_remove_small_objects = \
+            view.transpose(0,2,1,3).reshape(-1,view.shape[1]*view.shape[3])
+        im_sat = \
+            view2.transpose(0,2,1,3).reshape(-1,view2.shape[1]*view2.shape[3])
+    else:
+        im_remove_small_objects, im_sat = \
+        test(im_gray, im, image_to_label_parameters = image_to_label_parameters)
+
+
+    # Label image
+    if (image_to_label_parameters['verbose_mode']):
+        print('Labeling image')
+    im_label = label_image(im_remove_small_objects)
+
+    if (image_to_label_parameters['image_label_file_string']):
+        if (image_to_label_parameters['verbose_mode']):
+            print('Saving labeled image to %s' %
+                  image_to_label_parameters['image_label_file_string'])
+        im_out = im_label.astype('uint16')
+        imsave(image_to_label_parameters['image_label_file_string'],
+               exposure.rescale_intensity(im_out))
+
+    if (image_to_label_parameters['shuffled_label_file_string']):
+        if (image_to_label_parameters['verbose_mode']):
+            print('Saving shuffled label image to %s' %
+                  image_to_label_parameters['shuffled_label_file_string'])
+        im_shuffled = shuffle_labeled_image(im_label)
+        im_out = 255 * im_shuffled
+        im_out = im_out.astype('uint8')
+        imsave(image_to_label_parameters['shuffled_label_file_string'],
+               im_out)
+    else:
+        im_shuffled = np.zeros(1)
+
+    # Tidy up
+    return im_label, im_sat, im_shuffled, im_gray;
+
+        
+def test(im_gray, im, image_to_label_parameters = []):
+    
+    from skimage.io import imsave
+    from skimage import exposure
+    
+    print(image_to_label_parameters)
+    
     if (image_to_label_parameters['verbose_mode']):
         print('Subtracting background')
     im_background_corrected = correct_background(im_gray)
@@ -334,31 +434,6 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
         remove_small_objects(im_clear_edge,
                              image_to_label_parameters['min_object_size'])
 
-    # Label image
-    if (image_to_label_parameters['verbose_mode']):
-        print('Labeling image')
-    im_label = label_image(im_remove_small_objects)
-
-    if (image_to_label_parameters['image_label_file_string']):
-        if (image_to_label_parameters['verbose_mode']):
-            print('Saving labeled image to %s' %
-                  image_to_label_parameters['image_label_file_string'])
-        im_out = im_label.astype('uint16')
-        imsave(image_to_label_parameters['image_label_file_string'],
-               exposure.rescale_intensity(im_out))
-
-    if (image_to_label_parameters['shuffled_label_file_string']):
-        if (image_to_label_parameters['verbose_mode']):
-            print('Saving shuffled label image to %s' %
-                  image_to_label_parameters['shuffled_label_file_string'])
-        im_shuffled = shuffle_labeled_image(im_label)
-        im_out = 255 * im_shuffled
-        im_out = im_out.astype('uint8')
-        imsave(image_to_label_parameters['shuffled_label_file_string'],
-               im_out)
-    else:
-        im_shuffled = np.zeros(1)
-
     if (image_to_label_parameters['troubleshoot_mode']):
         fig, ax = plt.subplots(4, 2, figsize=(10, 10))
         ax[0, 0].imshow(im)
@@ -376,8 +451,7 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
         ax[3, 0].imshow(im_filled)
         ax[3, 0].set_title('Filled holes')
 
-    # Tidy up
-    return im_label, im_sat, im_shuffled, im_gray;
+    return im_remove_small_objects, im_sat
 
 def handle_potentially_connected_fibers(im_class, im_label,
                                         blob_data, region,
@@ -440,32 +514,43 @@ def handle_potentially_connected_fibers(im_class, im_label,
                                            watershed_distance,
                                            troubleshoot_mode)
             max_watershed = np.amax(im_watershed)
-
-            # Classify that to get new properties
-            im_class_new, blob_data_new = \
-                ml.classify_labeled_image(im_watershed, classifier_model)
-
-            # Update the sub_label with new labels
-            im_bw = np.zeros(im_watershed.shape)
-            im_bw[im_watershed > 0] = 1
-            im_sub_label[im_sub_blob > 0] = \
-                im_watershed[im_sub_blob > 0]
-            im_sub_label = im_sub_label + \
-                (blob_counter * im_bw)
-            im_label2[top:bottom, left:right] = im_sub_label
-
-            # Similarly, update im_sub_class
-            im_sub_class[im_sub_blob > 0] = 0
-            im_sub_class[im_sub_blob > 0] = im_class_new[im_sub_blob > 0]
-
-            # Similarly substitute new class labels
-            im_class2[top:bottom, left:right] = im_sub_class
-
-            # Add new blobs to blob_data
-            blob_data2.append(blob_data_new)
-
-            # Update blob_counter
-            blob_counter = blob_counter + np.amax(im_watershed)
+            
+#            if (i==128):
+#                f,ax = plt.subplots(3,2, figsize=(8,8))
+#                ax[0,0].imshow(im_sub_blob)
+#                ax[0,1].imshow(im_sub_class)
+#                ax[1,0].imshow(im_watershed)
+                
+            if (max_watershed > 0):
+                # There was at least one blob
+                # Classify them to get new properties
+                im_class_new, blob_data_new = \
+                    ml.classify_labeled_image(im_watershed, classifier_model)
+    
+                # Update the sub_label with new labels
+                im_bw = np.zeros(im_watershed.shape)
+                im_bw[im_watershed > 0] = 1
+                im_sub_label[im_sub_blob > 0] = \
+                    im_watershed[im_sub_blob > 0]
+                im_sub_label = im_sub_label + \
+                    (blob_counter * im_bw)
+                im_label2[top:bottom, left:right] = im_sub_label
+    
+                # Similarly, update im_sub_class
+                im_sub_class[im_sub_blob > 0] = 0
+                im_sub_class[im_sub_blob > 0] = im_class_new[im_sub_blob > 0]
+    
+                # Similarly substitute new class labels
+                im_class2[top:bottom, left:right] = im_sub_class
+    
+                # Add new blobs to blob_data
+                blob_data2.append(blob_data_new)
+    
+                # Update blob_counter
+                blob_counter = blob_counter + np.amax(im_watershed)
+            else:
+                print('Watershed discarded all potential blobs')
+                
 
             if (troubleshoot_mode):
                 ax[0, 0].imshow(im_sub_blob)
@@ -533,7 +618,7 @@ def refine_fiber_edges(im_seeds, im_gray,
                        troubleshoot_mode=0):
     # Refines fiber edges
 
-    import morphsnakes as ms
+    from . import morphsnakes as ms
     
     im_out = ms.morphological_chan_vese(im_gray,25,
                                         init_level_set = im_seeds)

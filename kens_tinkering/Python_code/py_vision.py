@@ -17,17 +17,18 @@ if __name__ == "__main__":
     
     if (0):
         excel_file_string = '..\\train\\Power_3_Gastroc_10x_blue_cropped_assigned.xlsx'
-        output_classifier_file_string = '..\\classifier\\Power_3_Gastroc_10x_blue_cropped_assigned.svc'
+        output_classifier_file_string = '..\\classifier\\Power_3_Gastroc_10x_blue_cropped_linear.svc'
         
-        ml.learn_test_1(excel_file_string, output_classifier_file_string)
+        ml.learn_test_2(excel_file_string, output_classifier_file_string)
     
     if (0):
-        im_proc.kens_test()
+        im_file_string = '..\\data\\top_left_Power_3_Gastroc_10x_blue.png'
+        im_proc.kens_test(im_file_string)
     
     if (1):
         # implement classifier
-        im_file_string = '..\\data\\Power_3_Gastroc_10x_blue_cropped.png'
-        classifier_file_string = '..\\classifier\\Power_3_Gastroc_10x_blue_cropped_assigned.svc'
+        im_file_string = '..\\data\\top_left_Power_3_Gastroc_10x_blue.png'
+        classifier_file_string = '..\\classifier\\Power_3_Gastroc_10x_blue_cropped_linear.svc'
         saturation_percent = 15
         min_blob_area = 50
         image_label_file_string = '..\\temp\\Power_3_Gastroc_10x_blue_labeled.png'
@@ -40,7 +41,7 @@ if __name__ == "__main__":
         classifier_parameters['result_file_string'] = result_file_string
         
         label_image_parameters={}
-        label_image_parameters['saturation_percent'] = 15
+        label_image_parameters['saturation_percent'] = 5
         label_image_parameters['min_object_size'] = 50
         label_image_parameters['verbose_mode'] = 1
         label_image_parameters['troubleshoot_mode'] = 1
@@ -48,6 +49,7 @@ if __name__ == "__main__":
             image_label_file_string
         label_image_parameters['shuffled_label_file_string'] = \
             shuffled_label_file_string
+        label_image_parameters['block_size']=1000
         
         fiber_refinement_parameters = {}
         fiber_refinement_parameters['refine_padding'] = 10
