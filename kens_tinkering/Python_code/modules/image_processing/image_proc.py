@@ -226,6 +226,24 @@ def shuffle_labeled_image(im_label):
 
     return im_shuffle
 
+def merge_rgb_planes(im_r,im_g,im_b,weights=[1, 1, 1]):
+    # Creates an RGB image from 3 planes
+
+    rows_cols = im_r.shape
+    im_out = np.zeros((rows_cols[0], rows_cols[1], 3))
+    
+    print('max im_r: %f' % np.amax(im_r))
+    print('max im_g: %f' % np.amax(im_g))
+    print('max im_b: %f' % np.amax(im_b))
+    
+    im_out[:, :, 0] = weights[0] * im_r
+    im_out[:, :, 1] = weights[1] * im_g
+    im_out[:, :, 2] = weights[2] * im_b
+    
+    print('max_im_out %f' % np.amax(im_out))
+    
+    return im_out
+
 def merge_label_and_blue_image(im_label, im_blue):
     # Places label on top of a blue image
     
@@ -510,100 +528,147 @@ def apply_watershed(im_blob, max_size, troubleshoot_mode=0):
     # Return re-imaged label
     return im_label
 
-def refine_fiber_edges(im_class, im_gray, refine_padding = 10,
+def refine_fiber_edges(im_seeds, im_gray,
+                       refine_fibers_parameters = [],
                        troubleshoot_mode=0):
     # Refines fiber edges
 
-    from skimage.measure import regionprops
-    from skimage.measure import find_contours
-    from skimage.color import label2rgb
-    from skimage.segmentation import find_boundaries
-    from skimage.segmentation import active_contour
-    from skimage.filters import gaussian
-    from skimage.draw import polygon
-    from scipy import ndimage as ndi
+    import morphsnakes as ms
+    
+    im_out = ms.morphological_chan_vese(im_gray,25,
+                                        init_level_set = im_seeds)
+    
+#    gimg = ms.inverse_gaussian_gradient(im_gray, sigma=1)
+#    im_out2 = ms.morphological_geodesic_active_contour(gimg,
+#                                                         iterations=100,
+#                                                         smoothing=1,
+#                                                         init_level_set = im_seed,
+#                                                         balloon=0)
+#    
+#    fig, ax = plt.subplots(2,2,figsize=(8,8))
+#    ax[0, 0].imshow(im_gray)
+#    ax[0, 1].imshow(gimg)
+#    ax[1, 0].imshow(im_out)
+#    ax[1, 1].imshow(im_out2)
+    
+    return im_out
 
-    # Create a new image showing fibers
-    im_fibers = np.zeros(im_class.shape)
-    im_fibers[im_class == 1] = 1
-
-    # Label it
-    im_label = label_image(im_fibers)
-    no_of_fibers = np.amax(im_label)
-
-    # Calculate regionprops for the labeled image
-    region = regionprops(im_label)
-
-    # Get copy of im_class
-    im_class2 = np.copy(im_class)
-
-    # Copy the im_gray
-    im_gray2 = np.copy(im_gray)
-    rows_cols = im_gray2.shape
-
-    # Create image result
-    im_final = np.zeros(im_label.shape)
-
-    # Cycle through them
-    print('Refining fibers')
-    for i, r in enumerate(region):
-
-        # Show progress
-        if (np.mod(i+1,100) == 1):
-            print("Refining fiber %d of %d" % (i + 1, no_of_fibers))
-
-        # Pull off the blob
-        # Get the bounding box of the blob
-        bbox_coordinates = r.bbox
-
-        top = np.amax([0, bbox_coordinates[0]-refine_padding])
-        bottom = np.amin([rows_cols[0], bbox_coordinates[2]+refine_padding])
-        left = np.amax([0, bbox_coordinates[1]-refine_padding])
-        right = np.amin([rows_cols[1], bbox_coordinates[3]+refine_padding])
-
-        # Pull off the sub-image containing the connected region
-        im_blob = np.copy(im_label)[top:bottom, left:right]
-
-        # Make sure that it only contains the connected blob we are
-        # currently working on
-        im_blob[np.not_equal(im_blob, (i + 1))] = 0
-        # Make it 0 or 1
-        im_blob[im_blob > 0] = 1
-
-        # Get boundaries as coordinates
-        # First if there are many
-        xx = find_contours(im_blob, 0.5)[0]
-        snake_init = np.squeeze(xx)[:, ::-1]
-
-        # Pull off the raw image
-        im_raw = np.copy(im_gray2)[top:bottom, left:right]
-
-        # Apply active countour
-        snake_final = active_contour(gaussian(im_raw, 3),
-                                     snake_init,
-                                     beta=10)
-
-        # Find the points in the snake
-        im_result = np.zeros(im_blob.shape)
-        rr,cc = polygon(snake_final[:, 1], snake_final[:, 0])
-        rows_cols_b = im_blob.shape
-        vi = np.nonzero(np.logical_and((rr < rows_cols_b[0]), (cc < rows_cols_b[1])))
-        im_result[rr[vi], cc[vi]] = 1
-
-        im_final[top:bottom, left:right] = \
-            im_final[top:bottom, left:right] + (i+1)*im_result
-
-        if (troubleshoot_mode):
-            fig, ax = plt.subplots(4,2, figsize=(10,7))
-            ax[0, 0].imshow(im_shuffle)
-            ax[0, 1].imshow(im_class2)
-            ax[1, 0].imshow(im_blob)
-            ax[1, 1].imshow(im_raw)
-            ax[2, 0].imshow(im_overlay)
-            ax[2, 0].plot(snake_init[:, 0], snake_init[:, 1],'-g', lw=2)
-            ax[2, 1].imshow(im_raw)
-            ax[2, 1].plot(snake_final[:, 0], snake_final[:, 1],'-r', lw=2)
-            ax[3, 0].imshow(im_result)
-            ax[3, 1].imshow(im_overlay2)
-
-    return im_final
+#    from skimage.measure import regionprops
+#    from skimage.measure import find_contours
+#    from skimage.color import label2rgb
+#    from skimage.segmentation import find_boundaries
+#    from skimage.segmentation import active_contour
+#    from skimage.filters import gaussian
+#    from skimage.draw import polygon
+#    from scipy import ndimage as ndi
+#
+#    # Create a new image showing fibers
+#    im_fibers = np.zeros(im_class.shape)
+#    im_fibers[im_class == 1] = 1
+#
+#    # Label it
+#    im_label = label_image(im_fibers)
+#    no_of_fibers = np.amax(im_label)
+#
+#    # Calculate regionprops for the labeled image
+#    region = regionprops(im_label)
+#
+#    # Get copy of im_class
+#    im_class2 = np.copy(im_class)
+#
+#    # Copy the im_gray
+#    im_gray2 = np.copy(im_gray)
+#    rows_cols = im_gray2.shape
+#
+#    # Smooth the gray-scale image
+##    im_gray = gaussian(im_gray,
+##                       refine_fibers_parameters['gaussian_smoothing_size'])
+##    im_gray = gaussian(im_gray,3)
+#
+#    # Create image result
+#    im_final = np.zeros(im_label.shape)
+#
+#    # Cycle through them
+#    refine_padding = refine_fibers_parameters['refine_padding']
+#    print('Refining fibers')
+#    for i, r in enumerate(region):
+#
+#        # Show progress
+#        if (np.mod(i+1,100) == 1):
+#            print("Refining fiber %d of %d" % (i + 1, no_of_fibers))
+#
+#        # Pull off the blob
+#        # Get the bounding box of the blob
+#        bbox_coordinates = r.bbox
+#
+#        top = np.amax([0, bbox_coordinates[0] - refine_padding])
+#        bottom = np.amin([rows_cols[0], bbox_coordinates[2] + refine_padding])
+#        left = np.amax([0, bbox_coordinates[1] - refine_padding])
+#        right = np.amin([rows_cols[1], bbox_coordinates[3] + refine_padding])
+#
+#        # Pull off the sub-image containing the connected region
+#        im_blob = np.copy(im_label)[top:bottom, left:right]
+#
+#        # Make sure that it only contains the connected blob we are
+#        # currently working on
+#        im_blob[np.not_equal(im_blob, (i + 1))] = 0
+#        # Make it 0 or 1
+#        im_blob[im_blob > 0] = 1
+#
+##        # Get boundaries as coordinates
+##        # First if there are many
+##        xx = find_contours(im_blob, 0.5)[0]
+##        snake_init = np.squeeze(xx)[:, ::-1]
+#
+#        # Pull off the raw image
+#        im_raw = np.copy(im_gray2)[top:bottom, left:right]
+#
+#        # Apply active countour
+#        
+##        snake_final = active_contour(gaussian(im_raw,refine_fibers_parameters['gaussian_smoothing_size']),
+##                                     snake_init,
+##                                     alpha=refine_fibers_parameters['snake_alpha'],
+##                                     beta=refine_fibers_parameters['snake_beta'],
+##                                     w_line=refine_fibers_parameters['snake_w_line'],
+##                                     w_edge=refine_fibers_parameters['snake_w_edge'],
+##                                     max_iterations=refine_fibers_parameters['max_iterations'])
+#
+##        # Find the points in the snake
+##        im_result = np.zeros(im_blob.shape)
+##        rr,cc = polygon(snake_final[:, 1], snake_final[:, 0])
+##        rows_cols_b = im_blob.shape
+##        vi = np.nonzero(np.logical_and((rr < rows_cols_b[0]), (cc < rows_cols_b[1])))
+##        im_result[rr[vi], cc[vi]] = 1
+#
+#        import morphsnakes as ms
+#        im_result = ms.morphological_chan_vese(im_raw,100,
+#                                               init_level_set = im_blob,
+#                                               lambda1=1,
+#                                               smoothing = 1)
+#        
+##        gimg = ms.inverse_gaussian_gradient(im_raw, alpha=1000, sigma=1)
+##        im_result = ms.morphological_geodesic_active_contour(gimg,
+##                                                             iterations=100,
+##                                                             smoothing=0,
+##                                                             init_level_set = im_blob,
+##                                                             balloon=1)
+#        
+#
+#
+#        im_final[top:bottom, left:right] = \
+#            im_final[top:bottom, left:right] + (i+1)*im_result
+#
+#        if (troubleshoot_mode):
+#            fig, ax = plt.subplots(4,2, figsize=(10,7))
+#            ax[0, 0].imshow(im_shuffle)
+#            ax[0, 1].imshow(im_class2)
+#            ax[1, 0].imshow(im_blob)
+#            ax[1, 1].imshow(im_raw)
+#            ax[2, 0].imshow(im_overlay)
+#            ax[2, 0].plot(snake_init[:, 0], snake_init[:, 1],'-g', lw=2)
+#            ax[2, 1].imshow(im_raw)
+#            ax[2, 1].plot(snake_final[:, 0], snake_final[:, 1],'-r', lw=2)
+#            ax[3, 0].imshow(im_result)
+#            ax[3, 1].imshow(im_overlay2)
+#
+#    return im_final

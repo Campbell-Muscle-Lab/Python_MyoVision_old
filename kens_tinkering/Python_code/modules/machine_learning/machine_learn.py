@@ -75,9 +75,11 @@ def load_classifier_from_file(classifier_file_string):
 
     return svclassifier
 
+
 def implement_classifier(raw_image_file_string, classifier_file_string,
                          classifier_parameters=[],
-                         image_to_label_parameters=[]):
+                         image_to_label_parameters=[],
+                         refine_fibers_parameters=[]):
     # Code uses a prior model to predict features
 
     from skimage.color import label2rgb
@@ -117,35 +119,62 @@ def implement_classifier(raw_image_file_string, classifier_file_string,
                                                     classifier_parameters['watershed_distance'],
                                                     troubleshoot_mode=0)
 
-    # Shuffle im_label for improved display
-    im_shuffle = im_proc.shuffle_labeled_image(im_label)
-    im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
+#    # Shuffle im_label for improved display
+#    im_shuffle = im_proc.shuffle_labeled_image(im_label)
+#    im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
+#
+#    fig, ax = plt.subplots(3, 2, figsize=(10,10))
+#    ax[0, 0].imshow(im_shuffle)
+#    ax[0, 1].imshow(im_class)
+#    ax[1, 0].imshow(im_label2)
+#    ax[2, 0].imshow(im_shuffle2)
+#    ax[2, 1].imshow(im_class2)
+#
+#    fig, ax = plt.subplots(3,2, figsize=(5,5))
+#    for i in np.arange(1,4):
+#        im_class_test = np.zeros(im_class2.shape)
+#        im_class_test[im_class2==i] = 1
+#        ax[(i-1),0].imshow(im_class_test)
+        
+    # Deduce the fiber seeds
+    im_fiber_seeds = np.zeros(im_class2.shape)
+    im_fiber_seeds[im_class2 == 1] = 1
 
-    fig, ax = plt.subplots(3, 2, figsize=(10,10))
-    ax[0, 0].imshow(im_shuffle)
-    ax[0, 1].imshow(im_class)
-    ax[1, 0].imshow(im_label2)
-    ax[2, 0].imshow(im_shuffle2)
-    ax[2, 1].imshow(im_class2)
-
-    fig, ax = plt.subplots(3,2, figsize=(5,5))
-    for i in np.arange(1,4):
-        im_class_test = np.zeros(im_class2.shape)
-        im_class_test[im_class2==i] = 1
-        ax[(i-1),0].imshow(im_class_test)
-
-    im_final = im_proc.refine_fiber_edges(im_class2, im_sat)
+    im_refined = im_proc.refine_fiber_edges(im_fiber_seeds, im_sat,
+                                          refine_fibers_parameters = refine_fibers_parameters)
+    
+    
+    im_l2 = im_proc.label_image(im_refined)
+    r2 = im_proc.deduce_region_props(im_l2)
+    im_c2, bd2 = classify_labeled_image(im_l2, classifier_model)
+    
+    bd2.to_excel("..\\temp\\classify_test.xlsx")
+    
+    im_c3, im_l3 = \
+        im_proc.handle_potentially_connected_fibers(im_c2, im_l2,
+                                                    bd2, r2,
+                                                    classifier_model,
+                                                    classifier_parameters['watershed_distance'])
 
     # Create overlay
-    im_mask = np.zeros(im_final.shape)
-    im_mask[im_final>0] = 1
+    im_mask = np.zeros(im_c3.shape)
+    im_mask[im_c3==1] = 1
     im_overlay = label2rgb(im_mask, im_gray)
     
-    fig, ax = plt.subplots(1, 2, figsize=(12, 7))
-    ax[0].imshow(im_gray, cmap='gray')
-    ax[1].imshow(im_overlay)
+    fig,ax = plt.subplots(2,2, figsize=(12,7))
+    ax[0, 0].imshow(im_refined)
+    ax[0, 1].imshow(im_c2)
+    im_s2 = im_proc.shuffle_labeled_image(im_l2)
+    ax[1,0].imshow(im_s2)
+    
+    fig2, ax2 = plt.subplots(1, 2, figsize=(12, 7))
+    ax2[0].imshow(im_gray, cmap='gray')
+    ax2[1].imshow(im_overlay)
 
 
     # Save final result
-    im_out = im_proc.merge_label_and_blue_image(im_mask, im_gray)
+#    im_out = im_proc.merge_label_and_blue_image(im_mask, im_gray)
+    
+    im_out = im_proc.merge_rgb_planes(im_gray, np.zeros(im_gray.shape), im_mask)
+    
     imsave(classifier_parameters['result_file_string'], im_out)

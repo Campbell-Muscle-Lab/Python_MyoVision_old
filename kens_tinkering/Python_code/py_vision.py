@@ -26,13 +26,13 @@ if __name__ == "__main__":
     
     if (1):
         # implement classifier
-        im_file_string = '..\\data\\Power_3_Gastroc_10x_blue.png'
+        im_file_string = '..\\data\\Power_3_Gastroc_10x_blue_cropped.png'
         classifier_file_string = '..\\classifier\\Power_3_Gastroc_10x_blue_cropped_assigned.svc'
         saturation_percent = 15
         min_blob_area = 50
         image_label_file_string = '..\\temp\\Power_3_Gastroc_10x_blue_labeled.png'
         shuffled_label_file_string = '..\\temp\\Power_3_Gastroc_10x_blue_labeled.png'
-        result_file_string = '..\\temp\\Power_3_Gastroc_result.png'
+        result_file_string = '..\\temp\\Power_3_Gastroc_result_cropped.png'
         
         classifier_parameters={}
         classifier_parameters['verbose_mode'] = 1
@@ -48,7 +48,25 @@ if __name__ == "__main__":
             image_label_file_string
         label_image_parameters['shuffled_label_file_string'] = \
             shuffled_label_file_string
-            
+        
+        fiber_refinement_parameters = {}
+        fiber_refinement_parameters['refine_padding'] = 10
+        fiber_refinement_parameters['gaussian_smoothing_size'] = 1
+        fiber_refinement_parameters['snake_alpha'] = 0.001
+        fiber_refinement_parameters['snake_beta'] = 1
+        fiber_refinement_parameters['snake_w_line'] = 0.1
+        fiber_refinement_parameters['snake_w_edge'] = 0.5
+        fiber_refinement_parameters['max_iterations']= 1000
+        # Thought the above had worked, reverting to defaults
+        
+#        fiber_refinement_parameters['gaussian_smoothing_size'] = 3
+#        fiber_refinement_parameters['snake_alpha'] = 0.01
+#        fiber_refinement_parameters['snake_beta'] = 0.1
+#        fiber_refinement_parameters['snake_w_line'] = 0
+#        fiber_refinement_parameters['snake_w_edge'] = 1
+#        fiber_refinement_parameters['max_iterations']= 1000
+        
+        
 #        im_label, im_sat, im_shuffled, im_gray = \
 #            im_proc.raw_image_file_to_labeled_image(im_file_string,
 #                                                image_to_label_parameters=label_image_parameters)
@@ -63,7 +81,8 @@ if __name__ == "__main__":
         ml.implement_classifier(im_file_string,
                                 classifier_file_string,
                                 classifier_parameters = classifier_parameters,
-                                image_to_label_parameters=label_image_parameters)
+                                image_to_label_parameters=label_image_parameters,
+                                refine_fibers_parameters=fiber_refinement_parameters)
 
     if (0):
         raw_im_file_string = '..\\data\PoWer_3_Gastroc_10x_blue_cropped.png'
