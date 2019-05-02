@@ -133,18 +133,9 @@ def classify_labeled_image(im_label, classifier_model):
     blob_data, region = im_proc.calculate_blob_properties(im_label)
 
     # Apply the classifer
-    try:
-        X = blob_data.drop(['label'], axis=1)
-        c = classifier_model.predict(X)
-    except:
-        print('X')
-        print(X)
-        print('blob_data')
-        print(blob_data)
-        print('region')
-        print(region)
-    
-
+    X = blob_data.drop(['label'], axis=1)
+    c = classifier_model.predict(X)
+ 
     # Add the prediction column
     blob_data['predicted_class'] = c
 

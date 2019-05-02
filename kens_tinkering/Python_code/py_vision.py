@@ -41,7 +41,7 @@ if __name__ == "__main__":
         classifier_parameters['result_file_string'] = result_file_string
         
         label_image_parameters={}
-        label_image_parameters['saturation_percent'] = 5
+        label_image_parameters['saturation_percent'] = 15
         label_image_parameters['min_object_size'] = 50
         label_image_parameters['verbose_mode'] = 1
         label_image_parameters['troubleshoot_mode'] = 1

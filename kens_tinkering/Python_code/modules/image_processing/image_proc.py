@@ -18,30 +18,40 @@ def kens_test(image_file_string):
 
     from skimage.util import view_as_blocks
     
-    import cv2
-    im = cv2.imread(image_file_string)
-    im_gray = return_gray_scale_image_as_float(im)
+    a = np.array([[0, 1, 2, 3],
+                  [4, 5, 6, 7]])
+    b = view_as_blocks(a,block_shape = (2,1))
+    print(b[0,0])
+    print(b)
+    print(b.shape)
     
-    rc = im_gray.shape
-    print(rc)
-    im_gray = im_gray[0:2400,0:2800]
-    
-    block_shape = (200,200)
-    
-    view = view_as_blocks(im_gray, block_shape)
-    print('view')
-    print(view)
-    
-    for i in np.arange(0,10):
-        for j in np.arange(0,10):
-            print('i %d j %d' % (i,j))
-            view[i,j] = apply_Frangi_filter(view[i,j])
-            
-    r = view.transpose(0,2,1,3).reshape(-1,view.shape[1]*view.shape[3])
-    
-    fig, ax = plt.subplots(2,2, figsize=(5,5))
-    ax[0,0].imshow(im_gray)
-    ax[0,1].imshow(r)
+#    import cv2
+#    im = cv2.imread(image_file_string)
+#    im_gray = return_gray_scale_image_as_float(im)
+#    
+#    rc = im_gray.shape
+#    print(rc)
+#    im_gray = im_gray[0:2400,0:2800]
+#    
+#    block_shape = (4,4)
+#    
+#    view = view_as_blocks(im_gray, block_shape)
+#    print('view')
+##    print(view)
+#    print('size')
+#    print(view.shape)
+#    
+#    for i in np.arange(0,10):
+#        for j in np.arange(0,10):
+##            print('i %d j %d' % (i,j))
+#            view[i,j] = apply_Frangi_filter(view[i,j])
+#            break
+#            
+#    r = view.transpose(0,2,1,3).reshape(-1,view.shape[1]*view.shape[3])
+#    
+#    fig, ax = plt.subplots(2,2, figsize=(5,5))
+#    ax[0,0].imshow(im_gray)
+#    ax[0,1].imshow(r)
     
 
 def return_gray_scale_image_as_float(rgb_image):
@@ -61,8 +71,30 @@ def saturate_gray_scale_image(gray_image, x):
     # saturates a gray-scale image so that x% of pixels are at low or high
     from skimage.exposure import rescale_intensity
     
-    lo, hi = np.percentile(gray_image, (x, 100-x))
-    sat_im = rescale_intensity(gray_image, in_range=(lo, hi))
+    # This code starts by attempting to rescale at x%
+    # If that's not possible (for example, the image is mostly dark, with
+    # a small bright area), lo,hi reqturn as 0 and sat_im becomes NaN throwing
+    # an error
+    # To overcome this, we start with an initial value of x, and check the
+    # saturation works. If it doesn't, we reduce x successively. If x drops
+    # too low, sat_im is set all zeros
+    initial_x = x;
+    
+    keep_going = 1
+    while (keep_going):
+        lo, hi = np.percentile(gray_image, (x, 100-x))
+
+        if (hi > 0):
+            keep_going = 0
+            sat_im = rescale_intensity(gray_image, in_range=(lo, hi))
+        else:
+            x = x - (0.1*initial_x)
+            # Final check
+            if (x<=0):
+                keep_going=0;
+                print('saturate_gray_scale_image was forced to return zeros')
+                sat_im = np.zeros(gray_image.shape)
+        
     return sat_im
 
 def apply_Frangi_filter(im,
@@ -144,7 +176,6 @@ def calculate_blob_properties(im_label,
     # Function analyzes blobs, creating a panda structure and, optionally
     # creating an image for each blob
     
-    import matplotlib.pyplot as plt
     from skimage.measure import regionprops
     from skimage.color import label2rgb
     from skimage.io import imsave
@@ -189,10 +220,6 @@ def calculate_blob_properties(im_label,
             blob_data.at[i, 'major_axis_length'] = r.major_axis_length
             blob_data.at[i, 'minor_axis_length'] = r.minor_axis_length
             blob_data.at[i, 'solidity'] = r.solidity
-
-    #        blob_data.at[i, 'centroid_row'] = r.centroid[0]
-    #        blob_data.at[i, 'centroid_col'] = r.centroid[1]
-    #        blob_data.at[i, 'euler_number'] = r.euler_number
 
         if (output_image_base_file_string):
             # Creates an image showing a padded version of the blob
@@ -307,66 +334,89 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
                                     image_to_label_parameters = []):
     # Code takes an image_file and returns a labeled image
 
-    import cv2
-    from skimage.io import imsave
+    from skimage.io import imsave, imread
     from skimage import exposure
     from skimage.util import view_as_blocks
     import matplotlib.pyplot as plt
     
-    
+    # Store image_to_label_parameters['verbose_mode'] as verbose
+    verbose = image_to_label_parameters['verbose_mode']
 
     # Read in the image and convert to float
     if (image_to_label_parameters['verbose_mode']):
-        print('Importing %s' % raw_image_file_string)
-    im = cv2.imread(raw_image_file_string)
+        print('Importing %s as gray-scale' % raw_image_file_string)
+    im_gray = imread(raw_image_file_string, as_grey = True)
+    print(im_gray.shape)
 
-    # Convert to gray-scale, normalize, and saturate
-    if (image_to_label_parameters['verbose_mode']):
-        print('Converting to gray-scale')
-    im_gray = return_gray_scale_image_as_float(im)
+    # Get image size
+    rows_cols = im_gray.shape
     
-    if (image_to_label_parameters['block_size'] > 0):
-        # Block process
-        
-        # Crop image to multiple of block size
-        bs = image_to_label_parameters['block_size']
-        rc = im_gray.shape
-        y_blocks = np.floor(rc[0]/bs)
-        x_blocks = np.floor(rc[1]/bs)
-        
-        y_blocks = y_blocks.astype(int)
-        x_blocks = x_blocks.astype(int)
-        
-        print('y_blocks: %d' % y_blocks)
-        print('x_blocks: %d' % x_blocks)
-        print('bs %d' % bs)
-        
-        im_gray = im_gray[0:(y_blocks*bs), 0:(x_blocks*bs)]
-        im_sat = np.zeros(im_gray.shape)
-        view = view_as_blocks(im_gray, (bs, bs))
-        view2 = view_as_blocks(im_sat, (bs, bs))
-        for i in np.arange(0,y_blocks):
-            for j in np.arange(0,x_blocks):
-                print('block (%d, %d):' % (i,j))
-                view[i,j], view2[i,j] = test(view[i,j], im,
-                    image_to_label_parameters = image_to_label_parameters)
-
-        im_remove_small_objects = \
-            view.transpose(0,2,1,3).reshape(-1,view.shape[1]*view.shape[3])
-        im_sat = \
-            view2.transpose(0,2,1,3).reshape(-1,view2.shape[1]*view2.shape[3])
+    # If image is smaller than block size, process it in one go
+    if (np.amax(rows_cols) <= image_to_label_parameters['block_size']):
+        # Process this image
+        if (verbose):
+            print('Processing image as a single block')
+            
+        im_sat, im_size_filtered = \
+            process_image_to_blobs(im_gray,
+                                   image_to_label_parameters=image_to_label_parameters)
     else:
-        im_remove_small_objects, im_sat = \
-        test(im_gray, im, image_to_label_parameters = image_to_label_parameters)
+        # We are processing the image as a sequence of blocks
+        # First pad the image so that its dimensions are a multiple
+        # of the block size
+        
+        # Use bs as short hand for block size dictionary entry
+        bs = image_to_label_parameters['block_size']
+        
+        # Work out the number of blocks we need
+        row_blocks = np.ceil(rows_cols[0] / bs).astype(int)
+        col_blocks = np.ceil(rows_cols[1] / bs).astype(int)
+        row_padding = ((bs * row_blocks) - rows_cols[0]).astype(int)
+        col_padding = ((bs * col_blocks) - rows_cols[1]).astype(int)
+        
+        # Pad rows and cols with zeros
+        im_pad = np.pad(im_gray, [(0, row_padding), (0, col_padding)],
+                                  'constant')
+ 
+        # Create matrices to hold the saturated values and size filtered blobs
+        im_sat = np.zeros(im_pad.shape)
+        im_size_filtered = np.zeros(im_pad.shape)
+        
+        # Process as blocks, each a square of size bs
+        pad_blocks = view_as_blocks(im_pad, block_shape = (bs, bs))
+        sat_blocks = view_as_blocks(im_sat, block_shape = (bs, bs))
+        size_filtered_blocks = view_as_blocks(im_size_filtered, block_shape = (bs, bs))
+        
+        # Loop through blocks in a nested loop
+        counter = 0
+        for i in np.arange(0, row_blocks):
+            for j in np.arange(0, col_blocks):
+                
+                counter = counter + 1
+                
+                if (verbose):
+                    print('Processing block %d of %d' %
+                          (counter, (row_blocks * col_blocks)))
+                    
+                sat_blocks[i, j], size_filtered_blocks[i, j] = \
+                    process_image_to_blobs(pad_blocks[i, j],
+                                           image_to_label_parameters=image_to_label_parameters)
 
+        # Rebuild images from blocks
+        im_sat = sat_blocks.transpose(0, 2, 1, 3). \
+            reshape(-1, sat_blocks.shape[1] * sat_blocks.shape[3])
+        im_size_filtered = size_filtered_blocks.transpose(0, 2, 1, 3). \
+            reshape(-1, size_filtered_blocks.shape[1] * size_filtered_blocks.shape[3])
+        im_gray = im_pad
 
-    # Label image
-    if (image_to_label_parameters['verbose_mode']):
+    # We're back on one path
+    #(we're done with block processing if we needed to do that)
+    if (verbose):
         print('Labeling image')
-    im_label = label_image(im_remove_small_objects)
+    im_label = label_image(im_size_filtered)
 
     if (image_to_label_parameters['image_label_file_string']):
-        if (image_to_label_parameters['verbose_mode']):
+        if (verbose):
             print('Saving labeled image to %s' %
                   image_to_label_parameters['image_label_file_string'])
         im_out = im_label.astype('uint16')
@@ -374,7 +424,7 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
                exposure.rescale_intensity(im_out))
 
     if (image_to_label_parameters['shuffled_label_file_string']):
-        if (image_to_label_parameters['verbose_mode']):
+        if (verbose):
             print('Saving shuffled label image to %s' %
                   image_to_label_parameters['shuffled_label_file_string'])
         im_shuffled = shuffle_labeled_image(im_label)
@@ -386,58 +436,65 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
         im_shuffled = np.zeros(1)
 
     # Tidy up
-    return im_label, im_sat, im_shuffled, im_gray;
+    return im_label, im_sat, im_shuffled, im_gray
 
         
-def test(im_gray, im, image_to_label_parameters = []):
+def process_image_to_blobs(im_gray, image_to_label_parameters = []):
+    # This is a helper function that takes a gray-scale image and processes
+    # it to create blobs
     
-    from skimage.io import imsave
-    from skimage import exposure
+    # Save dictionary term to reduce text
+    verbose = image_to_label_parameters['verbose_mode']
     
-    print(image_to_label_parameters)
-    
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Subtracting background')
     im_background_corrected = correct_background(im_gray)
 
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Normalizing gray-scale')
     im_norm = normalize_gray_scale_image(im_background_corrected)
 
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Saturating image')
-    im_sat = saturate_gray_scale_image(im_norm,
-                                       image_to_label_parameters['saturation_percent'])
+    im_sat = saturate_gray_scale_image(
+                im_norm,
+                image_to_label_parameters['saturation_percent'])
+    
+    # Check for image that couldn't be reliably saturated
+    if (np.amax(im_sat) == 0):
+        if (verbose):
+            print('Image could not be saturated so returning zeros')
+        im_size_filtered = np.zeros(im_gray.shape)
+        return im_size_filtered, im_sat
 
+    # If we get this far, we have some saturated edges
     # Deduce edge
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Applying Frangi filter')
     im_frangi = apply_Frangi_filter(im_sat)
 
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Applying Otsu threshold')
     im_edge = otsu_threshold(im_frangi)
 
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Filling holes in thresholded image')
     im_filled = fill_holes(im_edge)
 
     # Clear edge and remove small objects
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Clearing objects from boundaries')
     im_clear_edge = clear_edge(im_filled, invert_mode=0)
 
-    if (image_to_label_parameters['verbose_mode']):
+    if (verbose):
         print('Removing objects below a size of %d' %
                   image_to_label_parameters['min_object_size'])
-    im_remove_small_objects = \
+    im_size_filtered = \
         remove_small_objects(im_clear_edge,
                              image_to_label_parameters['min_object_size'])
 
     if (image_to_label_parameters['troubleshoot_mode']):
         fig, ax = plt.subplots(4, 2, figsize=(10, 10))
-        ax[0, 0].imshow(im)
-        ax[0, 0].set_title('Raw image')
         ax[0, 1].imshow(im_gray)
         ax[0, 1].set_title('Converted to gray-scale')
         ax[1, 0].imshow(im_background_corrected)
@@ -448,10 +505,10 @@ def test(im_gray, im, image_to_label_parameters = []):
         ax[2, 0].set_title('Frangi edges')
         ax[2, 1].imshow(im_edge)
         ax[2, 1].set_title('Otsu threshold')
-        ax[3, 0].imshow(im_filled)
+        ax[3, 0].imshow(im_size_filtered)
         ax[3, 0].set_title('Filled holes')
 
-    return im_remove_small_objects, im_sat
+    return im_size_filtered, im_sat
 
 def handle_potentially_connected_fibers(im_class, im_label,
                                         blob_data, region,
