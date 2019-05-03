@@ -159,115 +159,181 @@ def load_classifier_from_file(classifier_file_string):
     return svclassifier
 
 
-def implement_classifier(raw_image_file_string, classifier_file_string,
+def implement_classifier(raw_image_file_string,
                          classifier_parameters=[],
                          image_to_label_parameters=[],
                          refine_fibers_parameters=[]):
     # Code uses a prior model to predict features
+    
+    from skimage.io import imread
+    import gc
 
-    from skimage.color import label2rgb
-    from skimage.io import imsave
+    # Save dictionary terms to reduce clutter
+    verbose = image_to_label_parameters['verbose_mode']
+    classifier_file_string = classifier_parameters['classifier_file_string']
 
     # Turn raw_image_file_string into a labeled image
-    if (classifier_parameters['verbose_mode']):
+    if (verbose):
         print('Labeling image')
-    im_label, im_sat, im_shuffled, im_gray = \
+    im_label, im_sat, im_gray = \
         im_proc.raw_image_file_to_labeled_image(
                         raw_image_file_string,
                         image_to_label_parameters=image_to_label_parameters)
 
-    # Get the blob data
-    if (classifier_parameters['verbose_mode']):
+    if (verbose):
         print('Calculating blob properties')
     blob_data, region = im_proc.calculate_blob_properties(im_label)
 
     # Load the classifier
-    if (classifier_parameters['verbose_mode']):
+    if (verbose):
         print('Loading classifier')
     classifier_model = load_classifier_from_file(classifier_file_string)
 
     # Implement the classifier
-    if (classifier_parameters['verbose_mode']):
+    if (verbose):
         print('Classifying labeled image')
     im_class, blob_data = \
         classify_labeled_image(im_label, classifier_model)
-        
-    # Debug
-    blob_data.to_excel("..\\temp\\classify_debug.xlsx")
-    f_x, ax_x = plt.subplots(2,2, figsize=(10,10))
-    ax_x[0,0].imshow(im_gray)
-    ax_x[0,1].imshow(im_class)
-    ax_x[1,0].imshow(im_label)
-    im_s_x = im_proc.shuffle_labeled_image(im_label)
-    ax_x[1,1].imshow(im_s_x)
+
+    # Deal with potentially connected fibers
+    if (verbose):
+        print('Handling potentially connected fibers')
+    im_class2, im_label2 = \
+        im_proc.handle_potentially_connected_fibers(im_class, im_label,
+                                                    blob_data, region,
+                                                    classifier_model,
+                                                    classifier_parameters['watershed_distance'],
+                                                    troubleshoot_mode=0)
+    if (verbose):
+        print('Deducing fiber seeds and refining edges')
+    im_fiber_seeds = np.zeros(im_class2.shape)
+    im_fiber_seeds[im_class2 == 1] = 1
+
+    im_refined = im_proc.refine_fiber_edges(im_fiber_seeds, im_gray,
+                                          refine_fibers_parameters = refine_fibers_parameters)
+
+    if (verbose):
+        print('Labeling image with refined edges')
+    im_label3 = im_proc.label_image(im_refined)
     
-#
-#    # Deal with potentially connected fibers
-#    if (classifier_parameters['verbose_mode']):
-#        print('Handling potentially connected fibers')
-#    im_class2, im_label2 = \
-#        im_proc.handle_potentially_connected_fibers(im_class, im_label,
-#                                                    blob_data, region,
-#                                                    classifier_model,
-#                                                    classifier_parameters['watershed_distance'],
-#                                                    troubleshoot_mode=0)
-#
-##    # Shuffle im_label for improved display
-##    im_shuffle = im_proc.shuffle_labeled_image(im_label)
-##    im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
-##
-##    fig, ax = plt.subplots(3, 2, figsize=(10,10))
-##    ax[0, 0].imshow(im_shuffle)
-##    ax[0, 1].imshow(im_class)
-##    ax[1, 0].imshow(im_label2)
-##    ax[2, 0].imshow(im_shuffle2)
-##    ax[2, 1].imshow(im_class2)
-##
-##    fig, ax = plt.subplots(3,2, figsize=(5,5))
-##    for i in np.arange(1,4):
-##        im_class_test = np.zeros(im_class2.shape)
-##        im_class_test[im_class2==i] = 1
-##        ax[(i-1),0].imshow(im_class_test)
-#        
-#    # Deduce the fiber seeds
-#    im_fiber_seeds = np.zeros(im_class2.shape)
-#    im_fiber_seeds[im_class2 == 1] = 1
-#
-#    im_refined = im_proc.refine_fiber_edges(im_fiber_seeds, im_sat,
-#                                          refine_fibers_parameters = refine_fibers_parameters)
-#    
-#    
-#    im_l2 = im_proc.label_image(im_refined)
-#    r2 = im_proc.deduce_region_props(im_l2)
-#    im_c2, bd2 = classify_labeled_image(im_l2, classifier_model)
-#    
-#    bd2.to_excel("..\\temp\\classify_test.xlsx")
-#    
-#    im_c3, im_l3 = \
-#        im_proc.handle_potentially_connected_fibers(im_c2, im_l2,
-#                                                    bd2, r2,
-#                                                    classifier_model,
-#                                                    classifier_parameters['watershed_distance'])
-#
-#    im_s3 = im_proc.shuffle_labeled_image(im_l3)
-#
-#    # Create overlay
-#    im_mask = np.zeros(im_c3.shape)
-#    im_mask[im_c3==1] = 1
-#    im_overlay = label2rgb(im_mask, im_gray)
-#    
-#    fig,ax = plt.subplots(3,2, figsize=(12,7))
-#    ax[0, 0].imshow(im_refined)
-#    ax[0, 1].imshow(im_c2)
-#    im_s2 = im_proc.shuffle_labeled_image(im_l2)
-#    ax[1,0].imshow(im_s2)
-#    ax[2,0].imshow(im_s3)
-#    ax[2,1].imshow(im_c3)
-#    
-#
-#    # Save final result
-##    im_out = im_proc.merge_label_and_blue_image(im_mask, im_gray)
-#    
-#    im_out = im_proc.merge_rgb_planes(im_gray, np.zeros(im_gray.shape), im_mask)
-#    
-#    imsave(classifier_parameters['result_file_string'], im_out)
+    if (verbose):
+        print('Calculating blob properties for image with refined edges')
+    blob_data3, region3 = im_proc.calculate_blob_properties(im_label3)
+
+    if (verbose):
+        print('Re-classifying image with refined edges')
+    im_class3, blob_data3 = classify_labeled_image(im_label3, classifier_model)
+
+    if (verbose):
+        print('Final pass to separate potentially connected fibers')
+    im_final_classification, im_final_label = \
+        im_proc.handle_potentially_connected_fibers(im_class3, im_label3,
+                                                    blob_data3, region3,
+                                                    classifier_model,
+                                                    classifier_parameters['watershed_distance'])
+
+    if (verbose):
+        print('Creating final overlay')
+    
+    # Create a labeled image with a black background
+    im_temp = im_proc.shuffle_labeled_image(im_final_label,
+                                            bg_color=(0, 0, 0))
+    # Overlay on original image with transparency
+    im_b = im_proc.merge_rgb_planes(np.zeros(im_gray.shape),
+                            np.zeros(im_gray.shape),
+                            im_proc.normalize_gray_scale_image(im_gray))
+    im_final_overlay = np.ubyte(0.5 * 255*im_temp + 0.5 * 255*im_b)
+    del im_b
+    del im_temp
+
+    # Save classifier_steps file if required
+    if (classifier_parameters['classification_steps_image_file_string']):
+        if (verbose):
+            print('Creating figure to show classification steps')
+
+        # Need to load raw image here
+        im = imread(raw_image_file_string)
+
+        # Write image files, make and delete necessary images as we go
+        # to save memory
+        base_file_string = \
+            classifier_parameters['classification_steps_image_file_string']
+        create_image_file_for_classification_step(
+                im, 'Original image', base_file_string,'original_image')
+        create_image_file_for_classification_step(
+                im_gray, 'Image as gray scale',
+                base_file_string, 'gray_scaled')
+        create_image_file_for_classification_step(
+                im_sat, 'After saturation',
+                base_file_string, 'saturated')
+        
+        im_shuffle = im_proc.shuffle_labeled_image(im_label)
+        create_image_file_for_classification_step(
+                im_shuffle, 'Initial segmentation',
+                base_file_string, 'initial_segmentation')
+        del im_shuffle
+        
+        create_image_file_for_classification_step(
+                im_class, 'Initial classification',
+                base_file_string, 'initial_classification')
+
+        im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
+        create_image_file_for_classification_step(
+                im_shuffle2, 'Segmentation after initial separation of connected fibers',
+                base_file_string, 'segmentation_after_initial_separation_of_connected_fibers')
+        del im_shuffle2
+        
+        create_image_file_for_classification_step(
+                im_class2, 'Classification after initial separation of connected fibers',
+                base_file_string, 'classification_after_initial_separation_of_connected_fibers')
+        create_image_file_for_classification_step(
+                im_fiber_seeds, 'Fiber seeds',
+                base_file_string, 'fiber_seeds')
+        create_image_file_for_classification_step(
+                im_refined, 'Refined fiber edges',
+                base_file_string, 'refined_edges')
+
+        im_shuffle3 = im_proc.shuffle_labeled_image(im_label3)
+        create_image_file_for_classification_step(
+                im_shuffle3, 'Segmentation after refined edges',
+                base_file_string, 'segmentation_after_refined_edges')
+        del im_shuffle3
+
+        create_image_file_for_classification_step(
+                im_class3, 'Classification after refined edges',
+                base_file_string, 'classification_after_refined_edges')
+
+        im_final_shuffle = im_proc.shuffle_labeled_image(im_final_label)
+        create_image_file_for_classification_step(
+                im_final_shuffle, 'Final segmentation',
+                base_file_string, 'final_segmentation')
+        del im_final_shuffle
+
+        create_image_file_for_classification_step(
+                im_final_classification, 'Final classification',
+                base_file_string, 'final_classification')
+        create_image_file_for_classification_step(
+                im_final_overlay, 'Final overlay',
+                base_file_string, 'final_overlay')
+
+    return im_final_classification, im_final_label, im_final_overlay
+
+def create_image_file_for_classification_step(im, im_title,
+                                              base_file_string,
+                                              file_label,
+                                              verbose=1):
+    # Creates a figure showing an image with a title and saves it to file
+
+    # Insert file_label into the base_file_string
+    output_file_string = base_file_string[:-4] + ('_%s' % file_label) + \
+                            base_file_string[-4:]
+
+    if (verbose):
+        print('Writing %s' % output_file_string)
+
+    fig, ax = plt.subplots(1, 1, figsize = (10, 10))
+    ax.imshow(im)
+    ax.set_title(im_title)
+
+    plt.savefig(output_file_string, bbox_inches='tight')
+    plt.close(fig=fig)
