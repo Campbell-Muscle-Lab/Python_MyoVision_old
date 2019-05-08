@@ -5,6 +5,68 @@ import matplotlib.pyplot as plt
 
 from modules.image_processing import image_proc as im_proc
 
+def create_classifier_model(classification_parameters):
+    # Code develops a classifier from manually annotated data
+
+    from sklearn import svm, datasets
+    import pickle
+
+    # Load data
+    print('Loading data for classification')
+    d = pd.read_excel(classification_parameters['input_data_file_string'])
+
+    # Parse data
+    c = d['classification']
+    d = d.drop(['classification', 'label'], axis=1)
+
+    # Create classifier
+    if (classification_parameters['classification_kernel'] == 'linear'):
+        classifier = svm.SVC(kernel='linear')
+
+    if (classification_parameters['classification_kernel'] == 'poly'):
+        classifier = svm.SVC(kernel='poly',
+                             order=classification_parameters['poly_order'])
+
+    # Training classifier
+    print('Training classifier')
+    classifier.fit(d, c)
+
+    # Save model
+    classifier_output_file_string = \
+        classification_parameters['output_classifier_file_string']
+    if (classifier_output_file_string):
+        print('Saving classifier model to %s' % classifier_output_file_string)
+        pickle.dump(classifier,
+                    open(classifier_output_file_string, 'wb'))
+
+    # Make figure
+    print('Making classifier figure')
+    var_names = d.columns
+    no_of_variables = len(var_names)
+
+    # Make a figure
+    fig, ax = plt.subplots(no_of_variables, no_of_variables, figsize=(10,10))
+    for i in np.arange(0, no_of_variables):
+        for j in np.arange(i, no_of_variables):
+            x = d.iloc[:,i]
+            y = d.iloc[:,j]
+            
+            x_step = 0.01 * (x.max() - x.min())
+            y_step = 0.01 * (y.max() - y.min())
+
+#            xm,ym = make_meshgrid(x,y,[x_step,y_step])
+#            plot_contours(ax[i,j],classifier,xm,ym,
+#                          cmap=plt.cm.coolwarm,s=20,edgecolors='k')
+
+            ax[i, j].scatter(x,y, c=c, alpha=0.2)
+            ax[i, j].set_xlabel(var_names[i])
+            ax[i, j].set_ylabel(var_names[j])
+
+    output_image_file_string = classification_parameters['output_image_file_string']
+    print('Saving figure to %s' % output_image_file_string)
+    plt.savefig(output_image_file_string)
+
+    
 def learn_test_2(input_data_file_string, output_classifier_file_string):
     
     from sklearn import svm, datasets
@@ -130,7 +192,8 @@ def classify_labeled_image(im_label, classifier_model):
     # Code implements the classifer on a labled image
     
     # Get the blob data
-    blob_data, region = im_proc.calculate_blob_properties(im_label)
+    blob_data, region = im_proc.calculate_blob_properties(im_label,
+                                                          np.zeros(im_label.shape))
 
     # Apply the classifer
     X = blob_data.drop(['label'], axis=1)
@@ -160,7 +223,7 @@ def load_classifier_from_file(classifier_file_string):
 
 
 def implement_classifier(raw_image_file_string,
-                         classifier_parameters=[],
+                         classification_parameters=[],
                          image_to_label_parameters=[],
                          refine_fibers_parameters=[]):
     # Code uses a prior model to predict features
@@ -170,7 +233,7 @@ def implement_classifier(raw_image_file_string,
 
     # Save dictionary terms to reduce clutter
     verbose = image_to_label_parameters['verbose_mode']
-    classifier_file_string = classifier_parameters['classifier_file_string']
+    classification_file_string = classification_parameters['classification_file_string']
 
     # Turn raw_image_file_string into a labeled image
     if (verbose):
@@ -182,12 +245,13 @@ def implement_classifier(raw_image_file_string,
 
     if (verbose):
         print('Calculating blob properties')
-    blob_data, region = im_proc.calculate_blob_properties(im_label)
+    blob_data, region = im_proc.calculate_blob_properties(im_label,
+                                                          np.zeros(im_label.size))
 
     # Load the classifier
     if (verbose):
         print('Loading classifier')
-    classifier_model = load_classifier_from_file(classifier_file_string)
+    classifier_model = load_classifier_from_file(classification_file_string)
 
     # Implement the classifier
     if (verbose):
@@ -202,8 +266,31 @@ def implement_classifier(raw_image_file_string,
         im_proc.handle_potentially_connected_fibers(im_class, im_label,
                                                     blob_data, region,
                                                     classifier_model,
-                                                    classifier_parameters['watershed_distance'],
+                                                    classification_parameters['watershed_distance'],
                                                     troubleshoot_mode=0)
+
+    if (classification_parameters['classification_steps_image_file_string']):
+        # Save this dictionary term
+        base_file_string = \
+            classification_parameters['classification_steps_image_file_string']
+            
+        create_image_file_for_classification_step(
+                im_sat, 'After saturation',
+                base_file_string, 'saturated')
+
+        im_shuffle = im_proc.shuffle_labeled_image(im_label)
+        create_image_file_for_classification_step(
+                im_shuffle, 'Initial segmentation',
+                base_file_string, 'initial_segmentation')
+        del im_shuffle
+
+        create_image_file_for_classification_step(
+                im_class, 'Initial classification',
+                base_file_string, 'initial_classification')
+
+    # Delete images we no longer need to save memory
+    del im_sat, im_class, im_label
+
     if (verbose):
         print('Deducing fiber seeds and refining edges')
     im_fiber_seeds = np.zeros(im_class2.shape)
@@ -215,10 +302,31 @@ def implement_classifier(raw_image_file_string,
     if (verbose):
         print('Labeling image with refined edges')
     im_label3 = im_proc.label_image(im_refined)
-    
+
+    if (classification_parameters['classification_steps_image_file_string']):
+        create_image_file_for_classification_step(
+                im_class2, 'Classification after initial separation of connected fibers',
+                base_file_string, 'classification_after_initial_separation_of_connected_fibers')
+        create_image_file_for_classification_step(
+                im_fiber_seeds, 'Fiber seeds',
+                base_file_string, 'fiber_seeds')
+        create_image_file_for_classification_step(
+                im_refined, 'Refined fiber edges',
+                base_file_string, 'refined_edges')
+        im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
+        create_image_file_for_classification_step(
+                im_shuffle2, 'Segmentation after initial separation of connected fibers',
+                base_file_string, 'segmentation_after_initial_separation_of_connected_fibers')
+        del im_shuffle2
+
+    # Delete some images we no longer need to save memory
+    del im_class2, im_label2
+    del im_fiber_seeds, im_refined
+
     if (verbose):
         print('Calculating blob properties for image with refined edges')
-    blob_data3, region3 = im_proc.calculate_blob_properties(im_label3)
+    blob_data3, region3 = im_proc.calculate_blob_properties(im_label3,
+                                                            np.zeros(im_label3.shape))
 
     if (verbose):
         print('Re-classifying image with refined edges')
@@ -230,7 +338,10 @@ def implement_classifier(raw_image_file_string,
         im_proc.handle_potentially_connected_fibers(im_class3, im_label3,
                                                     blob_data3, region3,
                                                     classifier_model,
-                                                    classifier_parameters['watershed_distance'])
+                                                    classification_parameters['watershed_distance'],
+                                                    troubleshoot_mode=1)
+    im_final_classification = im_proc.fill_holes_in_non_binary_image(im_final_classification)
+    im_final_label = im_proc.fill_holes_in_non_binary_image(im_final_label)
 
     if (verbose):
         print('Creating final overlay')
@@ -247,7 +358,7 @@ def implement_classifier(raw_image_file_string,
     del im_temp
 
     # Save classifier_steps file if required
-    if (classifier_parameters['classification_steps_image_file_string']):
+    if (classification_parameters['classification_steps_image_file_string']):
         if (verbose):
             print('Creating figure to show classification steps')
 
@@ -256,42 +367,11 @@ def implement_classifier(raw_image_file_string,
 
         # Write image files, make and delete necessary images as we go
         # to save memory
-        base_file_string = \
-            classifier_parameters['classification_steps_image_file_string']
         create_image_file_for_classification_step(
                 im, 'Original image', base_file_string,'original_image')
         create_image_file_for_classification_step(
                 im_gray, 'Image as gray scale',
                 base_file_string, 'gray_scaled')
-        create_image_file_for_classification_step(
-                im_sat, 'After saturation',
-                base_file_string, 'saturated')
-        
-        im_shuffle = im_proc.shuffle_labeled_image(im_label)
-        create_image_file_for_classification_step(
-                im_shuffle, 'Initial segmentation',
-                base_file_string, 'initial_segmentation')
-        del im_shuffle
-        
-        create_image_file_for_classification_step(
-                im_class, 'Initial classification',
-                base_file_string, 'initial_classification')
-
-        im_shuffle2 = im_proc.shuffle_labeled_image(im_label2)
-        create_image_file_for_classification_step(
-                im_shuffle2, 'Segmentation after initial separation of connected fibers',
-                base_file_string, 'segmentation_after_initial_separation_of_connected_fibers')
-        del im_shuffle2
-        
-        create_image_file_for_classification_step(
-                im_class2, 'Classification after initial separation of connected fibers',
-                base_file_string, 'classification_after_initial_separation_of_connected_fibers')
-        create_image_file_for_classification_step(
-                im_fiber_seeds, 'Fiber seeds',
-                base_file_string, 'fiber_seeds')
-        create_image_file_for_classification_step(
-                im_refined, 'Refined fiber edges',
-                base_file_string, 'refined_edges')
 
         im_shuffle3 = im_proc.shuffle_labeled_image(im_label3)
         create_image_file_for_classification_step(
