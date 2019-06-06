@@ -397,6 +397,10 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
     if (verbose):
         print('Importing %s as gray-scale' % raw_image_file_string)
     im_gray = imread(raw_image_file_string, as_gray = True)
+    if (len(im_gray.shape)>2):
+        print('Image was not read as 2D')
+        print('Try forcing conversion')
+        im_gray = rgb2gray(im_gray)
     print(im_gray.shape)
 
     # Get image size
@@ -555,7 +559,7 @@ def process_image_to_blobs(im_gray,
         ax[2, 1].set_title('Filled holes')
 
         plt.savefig(output_image_file_string, bbox_inches='tight')
-        plt.close(fig=fig)
+        plt.close()
 
     return im_size_filtered, im_sat
 

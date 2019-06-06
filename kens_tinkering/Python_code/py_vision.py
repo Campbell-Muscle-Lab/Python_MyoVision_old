@@ -11,14 +11,19 @@ import modules.analysis.anal as an
 
 if __name__ == "__main__":
 
-    if (sys.argv[1] == 'find_blobs'):
-        an.find_blobs(sys.argv[2])
-
-    if (sys.argv[1] == 'train_classifier'):
-        an.train_classifier(sys.argv[2])
+    try:
+        if (sys.argv[1] == 'find_blobs'):
+            an.find_blobs(sys.argv[2])
+    
+        if (sys.argv[1] == 'train_classifier'):
+            an.train_classifier(sys.argv[2])
+            
+        if (sys.argv[1] == 'analyze_image'):
+            an.analyze_image_file(sys.argv[2])
+    except:
+        a=1
         
-    if (sys.argv[1] == 'analyze_image'):
-        an.analyze_image_file(sys.argv[2])
+    an.analyze_image_file('..\\demos\\configuration_files\\test_prediction3.xml')
         
 #    
 #    if (1):
