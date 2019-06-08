@@ -1,2 +1,0 @@
-class dataStructure:
-    pass
