@@ -8,59 +8,35 @@ import scipy as sp
 import numpy as np
 from skimage.color import rgb2gray
 from skimage.util import invert
+import os
 import matplotlib.pyplot as plt
 
 from modules.machine_learning import machine_learn as ml
 
 
-def kens_test(image_file_string):
-
-    from skimage.io import imread
-    from skimage.filters import median
-    from skimage.filters.rank import maximum
-    from skimage.morphology import disk, square
-    
-    
-    im = imread(image_file_string, as_gray=True)
-    im = normalize_gray_scale_image(im)
-    print('Max: %f' % np.amax(im))
-    print('Min: %f' % np.amin(im))
-    
-    im_rgb = imread(image_file_string)
-    
-    im2 = merge_rgb_planes(np.zeros(im.shape),np.zeros(im.shape),im)
-    
-    im3 = maximum(im,disk(2))
-    
-    fig, ax= plt.subplots(2,2)
-    ax[0,0].imshow(im_rgb)
-    ax[0,1].imshow(im)
-    ax[1,0].imshow(im2)
-    ax[1,1].imshow(im3)
-    
-    
-#    
-#    from skimage.util import view_as_blocks
-#    
-#    a = np.array([[0, 1, 2, 3],
-#                  [4, 5, 6, 7]])
-#    b = view_as_blocks(a,block_shape = (2,1))
-#    print(b[0,0])
-#    print(b)
-#    print(b.shape)
-
-def write_image_to_file(im, im_file_string):
+def write_image_to_file(im, im_file_string, verbose=1):
     # Writes an image to file
+
     from skimage.io import imsave
-    
+
+    # Check directory exists and save image file
+    dir_path = os.path.dirname(im_file_string)
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
+
+    if (verbose):
+        print('Writing image to %s' % im_file_string)
+
     imsave(im_file_string, im)
+
 
 def return_gray_scale_image_as_float(rgb_image):
     # converts a color image to a gray-scale float image
 
     from skimage import img_as_float
-    
+
     return img_as_float(rgb2gray(rgb_image))
+
 
 def normalize_gray_scale_image(gray_image):
     # normalizes a gray-scale image between 0 and 1
@@ -68,10 +44,11 @@ def normalize_gray_scale_image(gray_image):
     norm_image = norm_image / np.amax(norm_image)
     return norm_image
 
+
 def saturate_gray_scale_image(gray_image, x):
     # saturates a gray-scale image so that x% of pixels are at low or high
     from skimage.exposure import rescale_intensity
-    
+
     # This code starts by attempting to rescale at x%
     # If that's not possible (for example, the image is mostly dark, with
     # a small bright area), lo,hi reqturn as 0 and sat_im becomes NaN throwing
@@ -79,8 +56,9 @@ def saturate_gray_scale_image(gray_image, x):
     # To overcome this, we start with an initial value of x, and check the
     # saturation works. If it doesn't, we reduce x successively. If x drops
     # too low, sat_im is set all zeros
-    initial_x = x;
-    
+
+    initial_x = x
+
     keep_going = 1
     while (keep_going):
         lo, hi = np.percentile(gray_image, (x, 100-x))
@@ -91,17 +69,18 @@ def saturate_gray_scale_image(gray_image, x):
         else:
             x = x - (0.1*initial_x)
             # Final check
-            if (x<=0):
-                keep_going=0;
+            if (x <= 0):
+                keep_going = 0
                 print('saturate_gray_scale_image was forced to return zeros')
                 sat_im = np.zeros(gray_image.shape)
-        
+
     return sat_im
+
 
 def apply_Frangi_filter(im,
                         scale_low=1, scale_high=10, scale_step=1):
     # applies a Frangi filter to detect edges
-    from skimage.filters import frangi, hessian
+    from skimage.filters import frangi
 
     # This step seems to be important,
     # Frangi doesn't work well with (0, 1) image
@@ -110,10 +89,10 @@ def apply_Frangi_filter(im,
     # Lowering scale range below 1 seems to produce noise
     # Upper scale range gives wider boundaries between cells
     im_out = frangi(invert(im),
-                    scale_range = (scale_low, scale_high),
-                    scale_step = scale_step)
+                    np.arange(scale_low, scale_high, scale_step))
 
     return im_out
+
 
 def otsu_threshold(gray_image):
     # implements an otsu threshold
@@ -123,8 +102,9 @@ def otsu_threshold(gray_image):
     im_binary = gray_image > thresh
     im_binary = im_binary.astype(sp.bool_)
     im_binary = invert(im_binary)
-    
+
     return im_binary
+
 
 def label_image(im, connectivity=1):
     from skimage.measure import label
@@ -132,30 +112,35 @@ def label_image(im, connectivity=1):
     im_label = label(im, connectivity=1)
     return im_label
 
+
 def label_to_rgb(im_label):
     # turns a labeled image into an rgb image
-    
+
     from skimage.color import label2rgb
-    
+
     return label2rgb(im_label)
+
 
 def clear_edge(im, invert_mode=0):
     # clears edge
     from skimage.segmentation import clear_border
-    
+
     if (invert_mode):
         im = invert(im)
 
     return clear_border(im)
 
+
 def k_means_image(im, no_of_clusters):
     # separates a gray-scale image into no_of_clusters values
     from sklearn.cluster import KMeans
-    z =im.reshape((-1,1))
+
+    z = im.reshape((-1, 1))
     k_means = KMeans(n_clusters=no_of_clusters, random_state=0).fit(z)
     print(k_means)
     im_out = k_means.labels_.reshape((im.shape))
     return im_out
+
 
 def remove_small_objects(im, size_threshold):
     # removes objects below size_threshold
@@ -163,36 +148,27 @@ def remove_small_objects(im, size_threshold):
 
     return remove_small_objects(im, size_threshold)
 
+
 def deduce_region_props(im_label):
     # deduce region props
     from skimage.measure import regionprops
-    
+
     region = regionprops(im_label)
-    
+
     return region
 
-def calculate_blob_properties(im_label, im_base,
-                              calculate_blob_parameters = []):
+
+def calculate_blob_properties(im_label,
+                              output_excel_file_string='',
+                              output_blob_base_file_string='',
+                              im_base=[],
+                              display_padding=150):
     # Function analyzes blobs, creating a panda structure and, optionally
     # creating an image for each blob
-    
+
     from skimage.measure import regionprops
-    from skimage.color import label2rgb
-    from skimage.io import imsave
     import pandas as pd
     import warnings
-
-    # Unpack dictionary terms
-    try:
-        display_padding = calculate_blob_parameters['display_padding']
-        output_blob_base_file_string = \
-            calculate_blob_parameters['output_blob_base_file_string']
-        output_excel_file_string = \
-            calculate_blob_parameters['output_excel_file_string']
-    except:
-        display_padding = 0
-        output_blob_base_file_string = ''
-        output_excel_file_string = ''
 
     # Calculate regionprops for the labeled image
     with warnings.catch_warnings():
@@ -202,17 +178,19 @@ def calculate_blob_properties(im_label, im_base,
     # Set up for a data dump
     no_of_blobs = len(region)
     blob_data = pd.DataFrame({
-                              'label' : np.zeros(no_of_blobs),
-                              'area' : np.zeros(no_of_blobs),
-                              'eccentricity': np.zeros(no_of_blobs),
+                              'label': np.zeros(no_of_blobs),
+                              'area': np.zeros(no_of_blobs),
                               'convex_area': np.zeros(no_of_blobs),
+                              'eccentricity': np.zeros(no_of_blobs),
                               'equivalent_diameter': np.zeros(no_of_blobs),
                               'extent': np.zeros(no_of_blobs),
                               'major_axis_length': np.zeros(no_of_blobs),
                               'minor_axis_length': np.zeros(no_of_blobs),
+                              'orientation': np.zeros(no_of_blobs),
+                              'perimeter': np.zeros(no_of_blobs),
                               'solidity': np.zeros(no_of_blobs)})
 
-    for i,r in enumerate(region):
+    for i, r in enumerate(region):
         # Need this bit because of the major and minor axis lengths
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -220,12 +198,14 @@ def calculate_blob_properties(im_label, im_base,
             # Store blob data in pandas DataFrame
             blob_data.at[i, 'label'] = r.label
             blob_data.at[i, 'area'] = r.area
-            blob_data.at[i, 'eccentricity'] = r.eccentricity
             blob_data.at[i, 'convex_area'] = r.convex_area
+            blob_data.at[i, 'eccentricity'] = r.eccentricity
             blob_data.at[i, 'equivalent_diameter'] = r.equivalent_diameter
             blob_data.at[i, 'extent'] = r.extent
             blob_data.at[i, 'major_axis_length'] = r.major_axis_length
             blob_data.at[i, 'minor_axis_length'] = r.minor_axis_length
+            blob_data.at[i, 'orientation'] = r.orientation
+            blob_data.at[i, 'perimeter'] = r.perimeter
             blob_data.at[i, 'solidity'] = r.solidity
 
         if (output_blob_base_file_string):
@@ -261,50 +241,50 @@ def calculate_blob_properties(im_label, im_base,
             im_overlay = im_overlay.astype('uint8')
 
             # Writes padded blob to an image file created on the fly
-            ofs = ('%s_%d.png' % (output_blob_base_file_string,i+1))
+            ofs = ('%s_%d.png' % (output_blob_base_file_string, i+1))
             print('Writing blob label %d to %s' % (i+1, ofs))
-            write_image_to_file(im_overlay,ofs)
+            write_image_to_file(im_overlay, ofs)
 
-    # Write data to excel
-    if (output_excel_file_string):
-        print('Writing blob data to %s' % 
-              calculate_blob_parameters['output_excel_file_string'])
-        blob_data.to_excel(
-                calculate_blob_parameters['output_excel_file_string'])
+    # Write data to excel if there is a filename
+    if output_excel_file_string:
+        print('Writing blob data to %s' % output_excel_file_string)
+
+        # Check directory exists and make it if necessary
+        dir_path = os.path.dirname(output_excel_file_string)
+        if not os.path.isdir(dir_path):
+            os.makedirs(dir_path)
+
+        blob_data.to_excel(output_excel_file_string)
 
     # Return blob data
     return blob_data, region
 
-def create_annotated_blob_overlay(im_label, im_back, regions,
-                                  calculate_blob_parameters):
+
+def create_annotated_blob_overlay(im_overlay, regions,
+                                  output_file_string,
+                                  verbose=1):
     # Adds centroids and blob numbers to an overlay
-    
+
     from PIL import Image, ImageFont, ImageDraw
 
-    # Create a shuffled image
-    im_shuffle = shuffle_labeled_image(im_label, bg_color=(0,0,0))
+    # Write im_overlay to the output file
+    write_image_to_file(im_overlay, output_file_string, verbose=0)
 
-    # Overlay on im_back with transparency
-    im_b = merge_rgb_planes(np.zeros(im_label.shape),
-                            np.zeros(im_label.shape),
-                            im_back)
-
-    im_overlay = np.ubyte(0.5*255*im_shuffle + 0.5*255*im_b)
-    write_image_to_file(im_overlay,
-                       calculate_blob_parameters['output_annotated_image_file_string'])
-    
     # Now bring it back in using PIL
-    im = Image.open(calculate_blob_parameters['output_annotated_image_file_string'])
+    im = Image.open(output_file_string)
     font = ImageFont.truetype("arial.ttf", 12)
     d = ImageDraw.Draw(im)
 
     for i, r in enumerate(regions):
         cent = r['centroid']
-        d.text((cent[1],cent[0]), ("%d" % (i+1)), 'white', font=font)
-    
-    im.save(calculate_blob_parameters['output_annotated_image_file_string'])
+        d.text((cent[1], cent[0]), ("%d" % (i + 1)), 'white', font=font)
 
-def shuffle_labeled_image(im_label, bg_color = (1,1,1)):
+    if (verbose):
+        print('Writing image to %s' % output_file_string)
+    im.save(output_file_string)
+
+
+def shuffle_labeled_image(im_label, bg_color=(1, 1, 1)):
     # Turns a labeled image into an RGB image with blobs with random colors
     # to improve visualization
 
@@ -323,6 +303,7 @@ def shuffle_labeled_image(im_label, bg_color = (1,1,1)):
 
     return im_shuffle
 
+
 def merge_rgb_planes(im_r,im_g,im_b,weights=[1, 1, 1]):
     # Creates an RGB image from 3 planes
 
@@ -335,69 +316,73 @@ def merge_rgb_planes(im_r,im_g,im_b,weights=[1, 1, 1]):
 
     return im_out
 
+
 def merge_label_and_blue_image(im_label, im_blue):
     # Places label on top of a blue image
-    
+
     rows_cols = im_label.shape
-    
+
     im_out = np.zeros((rows_cols[0], rows_cols[1], 3))
-    
     im_label2 = np.zeros(im_label.shape)
-    im_label2[im_label > 0]= 0.5
-    
+    im_label2[im_label > 0] = 0.5
+
     im_out[:, :, 0] = im_label2
     im_out[:, :, 2] = im_blue
-    
+
     return im_out
+
 
 def correct_background(im):
     # Normalizes background
     from skimage.morphology import reconstruction
-    
+
     h = 0.5 * np.mean(im)
     seed = im-h
-    mask= im
+    mask = im
     dilated = reconstruction(seed, mask, method='dilation')
-    
+
     return dilated
+
 
 def fill_holes_in_binary_image(im):
     # Fills holes in image
 
     from scipy.ndimage import binary_fill_holes
-    
+
     return binary_fill_holes(im)
+
 
 def fill_holes_in_non_binary_image(im):
     # Fill holes in non_binary image
     from skimage.morphology import reconstruction
-    
+
+    # Save initial type
+    ty = im.dtype
+
     seed = np.copy(im)
     seed[1:-1, 1:-1] = np.amax(im)
     mask = im
 
     im_filled = reconstruction(seed, mask, method='erosion')
 
-    return im_filled
+    # Return filled image as the original type
+    return im_filled.astype(ty)
 
 
 def raw_image_file_to_labeled_image(raw_image_file_string,
-                                    image_to_label_parameters = []):
+                                    image_to_label_parameters=[],
+                                    results_folder=[],
+                                    verbose=1):
     # Code takes an image_file and returns a labeled image
 
-    from skimage.io import imsave, imread
-    from skimage import exposure
+    from skimage.io import imread
     from skimage.util import view_as_blocks
-    import matplotlib.pyplot as plt
-    
-    # Save dictionary term for convenience
-    verbose = image_to_label_parameters['verbose_mode']
 
     # Read in the image and convert to float
     if (verbose):
         print('Importing %s as gray-scale' % raw_image_file_string)
-    im_gray = imread(raw_image_file_string, as_gray = True)
-    if (len(im_gray.shape)>2):
+    im_gray = imread(raw_image_file_string, as_gray=True)
+    if (len(im_gray.shape) > 2):
         print('Image was not read as 2D')
         print('Try forcing conversion')
         im_gray = rgb2gray(im_gray)
@@ -405,43 +390,44 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
 
     # Get image size
     rows_cols = im_gray.shape
-    
+
     # If image is smaller than block size, process it in one go
     if (np.amax(rows_cols) <= image_to_label_parameters['block_size']):
         # Process this image
         if (verbose):
             print('Processing image as a single block')
-            
+
         im_size_filtered, im_sat = \
             process_image_to_blobs(im_gray,
-                                   image_to_label_parameters=image_to_label_parameters)
+                                   image_to_label_parameters=image_to_label_parameters,
+                                   results_folder=results_folder)
     else:
         # We are processing the image as a sequence of blocks
         # First pad the image so that its dimensions are a multiple
         # of the block size
-        
+
         # Use bs as short hand for block size dictionary entry
         bs = image_to_label_parameters['block_size']
-        
+
         # Work out the number of blocks we need
         row_blocks = np.ceil(rows_cols[0] / bs).astype(int)
         col_blocks = np.ceil(rows_cols[1] / bs).astype(int)
         row_padding = ((bs * row_blocks) - rows_cols[0]).astype(int)
         col_padding = ((bs * col_blocks) - rows_cols[1]).astype(int)
-        
+
         # Pad rows and cols with zeros
         im_pad = np.pad(im_gray, [(0, row_padding), (0, col_padding)],
                                   'constant')
- 
+
         # Create matrices to hold the saturated values and size filtered blobs
         im_sat = np.zeros(im_pad.shape)
         im_size_filtered = np.zeros(im_pad.shape)
-        
+
         # Process as blocks, each a square of size bs
-        pad_blocks = view_as_blocks(im_pad, block_shape = (bs, bs))
-        sat_blocks = view_as_blocks(im_sat, block_shape = (bs, bs))
-        size_filtered_blocks = view_as_blocks(im_size_filtered, block_shape = (bs, bs))
-        
+        pad_blocks = view_as_blocks(im_pad, block_shape=(bs, bs))
+        sat_blocks = view_as_blocks(im_sat, block_shape=(bs, bs))
+        size_filtered_blocks = view_as_blocks(im_size_filtered, block_shape=(bs, bs))
+
         # Loop through blocks in a nested loop
         counter = 0
         for i in np.arange(0, row_blocks):
@@ -456,6 +442,7 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
                 size_filtered_blocks[i, j], sat_blocks[i, j] = \
                     process_image_to_blobs(pad_blocks[i, j],
                                            image_to_label_parameters=image_to_label_parameters,
+                                           results_folder=results_folder,
                                            block_number=counter)
 
         # Rebuild images from blocks
@@ -483,13 +470,12 @@ def raw_image_file_to_labeled_image(raw_image_file_string,
 
 def process_image_to_blobs(im_gray,
                            image_to_label_parameters=[],
-                           block_number=1):
+                           results_folder=[],
+                           block_number=1,
+                           verbose=1):
     # This is a helper function that takes a gray-scale image and processes
     # it to create blobs
 
-    # Save dictionary term to reduce text
-    verbose = int(image_to_label_parameters['verbose_mode'])
-    
     if (verbose):
         print('Subtracting background')
     im_background_corrected = correct_background(im_gray)
@@ -503,7 +489,7 @@ def process_image_to_blobs(im_gray,
     im_sat = saturate_gray_scale_image(
                 im_norm,
                 image_to_label_parameters['saturation_percent'])
-    
+
     # Check for image that couldn't be reliably saturated
     if (np.amax(im_sat) == 0):
         if (verbose):
@@ -532,17 +518,15 @@ def process_image_to_blobs(im_gray,
         remove_small_objects(im_filled,
                              image_to_label_parameters['min_object_size'])
 
-    if (image_to_label_parameters['block_image_file_string']):
-        # Create a summary image - useful for troubleshooting
-        # and save to file
-
-        output_image_file_string = ('%s_%d.png' %
-               (image_to_label_parameters['block_image_file_string'],
-                block_number))
+    # Try to create a summary image - useful for troublshooting
+    if (results_folder):
+        block_image_file_string = os.path.join(
+                results_folder, 'processing','blocks',
+                ('block_%d.png' % block_number))
 
         if (verbose):
             print('Saving process_image_to_blobs figure to %s' %
-                  output_image_file_string)
+                  block_image_file_string)
 
         fig, ax = plt.subplots(3, 2, figsize=(7, 7))
         ax[0, 0].imshow(im_gray)
@@ -558,8 +542,18 @@ def process_image_to_blobs(im_gray,
         ax[2, 1].imshow(im_size_filtered)
         ax[2, 1].set_title('Filled holes')
 
-        plt.savefig(output_image_file_string, bbox_inches='tight')
+        # Check directory exists and save image file
+        dir_path = os.path.dirname(block_image_file_string)
+        if not os.path.isdir(dir_path):
+            os.makedirs(dir_path)
+
+        plt.savefig(block_image_file_string, bbox_inches='tight')
         plt.close()
+
+    else:
+        if (verbose):
+            print('No results folder specified - skipping save blocks image')
+
 
     return im_size_filtered, im_sat
 
@@ -585,7 +579,7 @@ def handle_potentially_connected_fibers(im_class, im_label,
 
     # Make copy of blob_data
     blob_data2 = blob_data.copy()
-    
+
     # Make a figure if required for troubleshooting
 #    if (troubleshoot_mode):
 #        fig, ax = plt.subplots(3, 2, figsize=(7,7))
@@ -594,11 +588,10 @@ def handle_potentially_connected_fibers(im_class, im_label,
     blob_counter = np.amax(im_label2)
     for i, r in enumerate(region):
         rc = r.coords
-        y = im_connected2[rc[:,0],rc[:,1]]
-        if (np.any(y==(i+1))):
-#        if (np.any(im_connected2 == (i+1))):
+        y = im_connected2[rc[:, 0], rc[:, 1]]
+        if (np.any(y == (i + 1))):
             if (verbose_mode):
-                print('Potentially connected fiber: %d of %d' % (i,len(region)))
+                print('Potentially connected fiber: %d of %d' % (i, len(region)))
 
             # Pull off the blob
             # Get the bounding box of the blob
@@ -613,7 +606,7 @@ def handle_potentially_connected_fibers(im_class, im_label,
             im_sub_blob = np.copy(im_connected2)[top:bottom, left:right]
             # Make sure that it only contains the connected blob we are
             # currently working on
-            im_sub_blob[np.not_equal(im_sub_blob, (i+1))]=0
+            im_sub_blob[np.not_equal(im_sub_blob, (i+1))] = 0
 
             # Pull off the corresponding bit of the labeled image
             im_sub_label = np.copy(im_label2)[top:bottom, left:right]
@@ -625,19 +618,19 @@ def handle_potentially_connected_fibers(im_class, im_label,
                                            watershed_distance,
                                            troubleshoot_mode)
             max_watershed = np.amax(im_watershed)
-            
+
 #            if (i==128):
 #                f,ax = plt.subplots(3,2, figsize=(8,8))
 #                ax[0,0].imshow(im_sub_blob)
 #                ax[0,1].imshow(im_sub_class)
 #                ax[1,0].imshow(im_watershed)
-                
+
             if (max_watershed > 0):
                 # There was at least one blob
                 # Classify them to get new properties
-                im_class_new, blob_data_new = \
+                im_class_new, blob_data_new, temp = \
                     ml.classify_labeled_image(im_watershed, classifier_model)
-    
+
                 # Update the sub_label with new labels
                 im_bw = np.zeros(im_watershed.shape)
                 im_bw[im_watershed > 0] = 1
@@ -646,22 +639,22 @@ def handle_potentially_connected_fibers(im_class, im_label,
                 im_sub_label = im_sub_label + \
                     (blob_counter * im_bw)
                 im_label2[top:bottom, left:right] = im_sub_label
-    
+
                 # Similarly, update im_sub_class
                 im_sub_class[im_sub_blob > 0] = 0
                 im_sub_class[im_sub_blob > 0] = im_class_new[im_sub_blob > 0]
-    
+
                 # Similarly substitute new class labels
                 im_class2[top:bottom, left:right] = im_sub_class
-    
+
                 # Add new blobs to blob_data
                 blob_data2.append(blob_data_new)
-    
+
                 # Update blob_counter
                 blob_counter = blob_counter + np.amax(im_watershed)
             else:
                 print('Watershed discarded all potential blobs')
-                
+
 #
 #            if (troubleshoot_mode):
 #                ax[0, 0].imshow(im_sub_blob)
@@ -724,29 +717,21 @@ def apply_watershed(im_blob, max_size, troubleshoot_mode=0):
     # Return re-imaged label
     return im_label
 
+
 def refine_fiber_edges(im_seeds, im_gray,
-                       refine_fibers_parameters = [],
-                       troubleshoot_mode=0):
-    # Refines fiber edges using an algoirhtm from morphsnakes
+                       refine_fibers_parameters=[]):
+    # Refines fiber edges using an algorithm from scikit-image
 
-    from . import morphsnakes as ms
+    from skimage.segmentation import (morphological_geodesic_active_contour,
+                                      inverse_gaussian_gradient)
 
-    im_out = ms.morphological_chan_vese(im_gray,
+    # Calculate the gradient image
+    im_gradient = inverse_gaussian_gradient(im_gray,
+                                            sigma = refine_fibers_parameters['sigma'])
+
+    # Now do the fitting
+    im_out = morphological_geodesic_active_contour(im_gradient,
                                         refine_fibers_parameters['max_iterations'],
-                                        init_level_set=im_seeds,
-                                        lambda2 = refine_fibers_parameters['lambda2'])
+                                        init_level_set=im_seeds)
 
-    if (refine_fibers_parameters['refine_fibers_image_file_string']):
-        # Create an image showing the overlay
-        im_label = label_image(im_out)
-        im_shuffle = shuffle_labeled_image(im_label,
-                                           bg_color=(0, 0, 0))
-        im_b = merge_rgb_planes(np.zeros(im_gray.shape),
-                                np.zeros(im_gray.shape),
-                                normalize_gray_scale_image(im_gray))
-        im_overlay = np.ubyte(0.5 * 255 * im_shuffle) + np.ubyte(0.5 * 255 * im_b)
-        # Write it to file
-        write_image_to_file(im_overlay,
-                            refine_fibers_parameters['refine_fibers_image_file_string'])
-
-    return im_out
+    return im_out, im_gradient

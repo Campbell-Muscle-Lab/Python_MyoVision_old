@@ -11,20 +11,35 @@ import modules.analysis.anal as an
 
 if __name__ == "__main__":
 
-    try:
-        if (sys.argv[1] == 'find_blobs'):
-            an.find_blobs(sys.argv[2])
-    
-        if (sys.argv[1] == 'train_classifier'):
-            an.train_classifier(sys.argv[2])
-            
-        if (sys.argv[1] == 'analyze_image'):
-            an.analyze_image_file(sys.argv[2])
-    except:
-        a=1
-        
-    an.analyze_image_file('..\\demos\\configuration_files\\test_prediction3.xml')
-        
+    process_started = 0
+
+    if (sys.argv[1] == 'find_blobs'):
+        process_started = 1
+        print('Py_vision: find_blobs(%s)' % sys.argv[2])
+        an.find_blobs(sys.argv[2])
+
+    if (sys.argv[1] == 'train_classifier'):
+        process_started = 1
+        print('Py_vision: an.train_classifier(%s)' % sys.argv[2])
+        an.train_classifier(sys.argv[2])
+
+    if (sys.argv[1] == 'analyze_images'):
+        process_started = 1
+        print('Py_vision: analyze_images(%s)' % sys.argv[2])
+        an.analyze_images(sys.argv[2])
+
+    if (sys.argv[1] == 'kens_test'):
+        process_started = 1
+        import modules.image_processing.image_proc as im
+        print(sys.argv[2])
+        im.kens_test(sys.argv[2])
+
+
+    if (process_started == 0):
+        print('Py_vision could not interpret inputs:\n[1]: %s\n[2]: %s' %
+              (sys.argv[1], sys.argv[2]))
+
+
 #    
 #    if (1):
 #        print(sys.argv[0])
