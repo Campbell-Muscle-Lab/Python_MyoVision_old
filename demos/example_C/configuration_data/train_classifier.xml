@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<MyoVision_analysis>
+
+	<train_classifier_parameters>
+		<input_data_file_string>..\demos\example_C\results\manual_classification\manual_classification.xlsx</input_data_file_string>
+		<classification_kernel>linear</classification_kernel>
+		<poly_order>3</poly_order>
+		<output_classifier_file_string>..\demos\example_C\classification_model\classification_model.svc</output_classifier_file_string>
+	</train_classifier_parameters>
+
+</MyoVision_analysis>

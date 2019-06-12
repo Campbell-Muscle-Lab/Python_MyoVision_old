@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="windows-1252"?>
+<MyoVision_analysis>
+	<task_files>
+		<task>
+			<raw_image_file_string>..\demos\example_C\raw_image\top_left_power_3_gastroc_10x_blue.png</raw_image_file_string>
+			<results_folder>..\demos\example_C\results</results_folder>
+		</task>
+	</task_files>
+	
+	<image_to_label_parameters>
+		<block_size>1000</block_size>
+		<saturation_percent>10</saturation_percent>
+		<min_object_size>50</min_object_size>
+		<watershed_distance>10</watershed_distance>
+	</image_to_label_parameters>
+
+</MyoVision_analysis>

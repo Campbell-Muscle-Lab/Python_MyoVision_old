@@ -24,8 +24,6 @@ def unpack_train_classifier_parameters_xml(doc):
         doc.MyoVision_analysis.train_classifier_parameters.classification_kernel.cdata
     train_classifier_parameters['poly_order'] = \
         int(doc.MyoVision_analysis.train_classifier_parameters.poly_order.cdata)
-    train_classifier_parameters['output_image_file_string'] = \
-        doc.MyoVision_analysis.train_classifier_parameters.output_image_file_string.cdata
     train_classifier_parameters['output_classifier_file_string'] = \
         doc.MyoVision_analysis.train_classifier_parameters.output_classifier_file_string.cdata
 

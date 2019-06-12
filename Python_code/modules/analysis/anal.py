@@ -11,30 +11,61 @@ from modules.untangle import untangle as ut
 from modules.xml import xml as x
 
 import os, shutil
+import numpy as np
 
 def find_blobs(configuration_file):
     # Find individual blobs in an image file
 
     # Parse the analysis xml file into a doc
     doc = ut.parse(configuration_file)
-    
-    # Unpack xml doc into a filename and dictionaries
-    raw_image_file_string = doc.MyoVision_analysis.raw_image.image_file_string.cdata
+
+    # Deduce the input image file and the results folder
+    task_list = x.unpack_task_files_xml(doc)
+
+    # Unpack the xml into dictionaries
     image_to_label_parameters = x.unpack_image_to_label_parameters_xml(doc)
-    calculate_blob_parameters = x.unpack_calculate_blob_parameters_xml(doc)
 
-    # Create a labeled image
-    im_label, im_sat, im_gray = im_proc.raw_image_file_to_labeled_image(
-                        raw_image_file_string,
-                        image_to_label_parameters=image_to_label_parameters)
+    # Loop through blobs
+    for i, t in enumerate(task_list):
+        print('Finding blobs in  %s with results written to %s' %
+              (task_list[i].raw_image_file_string,
+               task_list[i].results_folder))
 
-    # Procss the image to get blobs
-    blob_data, regions = im_proc.calculate_blob_properties(im_label, im_sat,
-                                      calculate_blob_parameters=calculate_blob_parameters)
+        # Pull out results_folder for later use
+        results_folder = task_list[i].results_folder
 
-    # Make an annoted overlay
-    im_proc.create_annotated_blob_overlay(im_label, im_sat, regions,
-                                          calculate_blob_parameters)
+        # Create a labeled image
+        im_label, im_sat, im_gray = im_proc.raw_image_file_to_labeled_image(
+                        task_list[i].raw_image_file_string,
+                        image_to_label_parameters=image_to_label_parameters,
+                        results_folder=results_folder)
+
+        # Process the image, saving individual blobs as we go
+        output_excel_file_string = os.path.join(results_folder,
+                                                'blob_metrics.xlsx')
+        output_blob_base_file_string = os.path.join(results_folder,
+                                                    'blobs','blob')
+
+        blob_data, regions = im_proc.calculate_blob_properties(
+                im_label,
+                output_excel_file_string=output_excel_file_string,
+                output_blob_base_file_string=output_blob_base_file_string,
+                im_base=im_gray)
+
+        # Overlay the labeled image on the background
+        im_temp = im_proc.shuffle_labeled_image(im_label,
+                                                bg_color=(0,0,0))
+        im_b = im_proc.merge_rgb_planes(np.zeros(im_gray.shape),
+                                        np.zeros(im_gray.shape),
+                                        im_proc.normalize_gray_scale_image(im_gray))
+        im_overlay = np.ubyte(0.5 * 255 * im_temp + 0.5 * 255 * im_b)
+
+
+        annotated_image_file_string = os.path.join(results_folder,
+                                                   'annotated_overlay.png')
+        
+        im_proc.create_annotated_blob_overlay(im_overlay, regions,
+                                              annotated_image_file_string)
 
 
 def train_classifier(configuration_file):
@@ -48,6 +79,7 @@ def train_classifier(configuration_file):
 
     # Train classifier
     ml.create_classifier_model(train_classifier_parameters)
+
 
 def analyze_images(configuration_file):
     # Parses the task list, and then analyzes images in series

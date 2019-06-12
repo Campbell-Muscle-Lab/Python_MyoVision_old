@@ -20,6 +20,7 @@ def create_classifier_model(classification_parameters):
     # Parse data
     c = d['classification']
     d = d.drop(['classification', 'label'], axis=1)
+    print(d.head())
 
     # Create classifier
     if (classification_parameters['classification_kernel'] == 'linear'):
@@ -36,37 +37,43 @@ def create_classifier_model(classification_parameters):
     # Save model
     classifier_output_file_string = \
         classification_parameters['output_classifier_file_string']
+
+    # Make the directory if it does not exist
+    dir_path = os.path.dirname(classifier_output_file_string)
+    if not os.path.isdir(dir_path):
+        os.makedirs(dir_path)
+
     if (classifier_output_file_string):
         print('Saving classifier model to %s' % classifier_output_file_string)
         pickle.dump(classifier,
                     open(classifier_output_file_string, 'wb'))
 
-    # Make figure
-    print('Making classifier figure')
-    var_names = d.columns
-    no_of_variables = len(var_names)
-
-    # Make a figure
-    fig, ax = plt.subplots(no_of_variables, no_of_variables, figsize=(10, 10))
-    for i in np.arange(0, no_of_variables):
-        for j in np.arange(i, no_of_variables):
-            x = d.iloc[:, i]
-            y = d.iloc[:, j]
-
-#            x_step = 0.01 * (x.max() - x.min())
-#            y_step = 0.01 * (y.max() - y.min())
+#    # Make figure
+#    print('Making classifier figure')
+#    var_names = d.columns
+#    no_of_variables = len(var_names)
 #
-#            xm,ym = make_meshgrid(x,y,[x_step,y_step])
-#            plot_contours(ax[i,j],classifier,xm,ym,
-#                          cmap=plt.cm.coolwarm,s=20,edgecolors='k')
-
-            ax[i, j].scatter(x, y, c=c, alpha=0.2)
-            ax[i, j].set_xlabel(var_names[i])
-            ax[i, j].set_ylabel(var_names[j])
-
-    output_image_file_string=classification_parameters['output_image_file_string']
-    print('Saving figure to %s' % output_image_file_string)
-    plt.savefig(output_image_file_string)
+#    # Make a figure
+#    fig, ax = plt.subplots(no_of_variables, no_of_variables, figsize=(10, 10))
+#    for i in np.arange(0, no_of_variables):
+#        for j in np.arange(i, no_of_variables):
+#            x = d.iloc[:, i]
+#            y = d.iloc[:, j]
+#
+##            x_step = 0.01 * (x.max() - x.min())
+##            y_step = 0.01 * (y.max() - y.min())
+##
+##            xm,ym = make_meshgrid(x,y,[x_step,y_step])
+##            plot_contours(ax[i,j],classifier,xm,ym,
+##                          cmap=plt.cm.coolwarm,s=20,edgecolors='k')
+#
+#            ax[i, j].scatter(x, y, c=c, alpha=0.2)
+#            ax[i, j].set_xlabel(var_names[i])
+#            ax[i, j].set_ylabel(var_names[j])
+#
+#    output_image_file_string=classification_parameters['output_image_file_string']
+#    print('Saving figure to %s' % output_image_file_string)
+#    plt.savefig(output_image_file_string)
 
 
 def learn_test_2(input_data_file_string, output_classifier_file_string):
@@ -78,7 +85,6 @@ def learn_test_2(input_data_file_string, output_classifier_file_string):
 
     c = d['classification']
     d = d.drop(['classification','label'], axis=1)
-#    d = d.loc[:,['area','eccentricity']]
     print(d.head())
     
     

@@ -9,7 +9,7 @@
 	
 	<image_to_label_parameters>
 		<block_size>1000</block_size>
-		<saturation_percent>15</saturation_percent>
+		<saturation_percent>10</saturation_percent>
 		<min_object_size>50</min_object_size>
 		<watershed_distance>10</watershed_distance>
 	</image_to_label_parameters>
